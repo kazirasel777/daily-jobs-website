@@ -1,249 +1,297 @@
 // File: app/job/[slug]/page.tsx
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import ViewCounter from '@/components/ViewCounter';
 import Image from 'next/image';
+import { notFound } from 'next/navigation';
+import ViewCounter from '@/components/ViewCounter';
+import { getJobDetail } from '@/lib/api';
+import { sanitizeRichText } from '@/lib/sanitize';
 
-// ✅ স্মার্ট ক্যাটাগরি ম্যাচিং ফাংশন
-const getHeadlineImage = (job: any) => {
-  // ১. অরিজিনাল ছবি থাকলে সেটিই দেখাবে
-  if (job.headline_image_url && job.headline_image_url.length > 5) return job.headline_image_url;
-  if (job.logo_url && job.logo_url.length > 5) return job.logo_url;
+interface JobDetailsProps {
+  params: Promise<{ slug: string }>;
+}
 
-  // ২. ক্যাটাগরির নাম এবং ভ্যালু একসাথে করে চেক করা
-  const catName = (job.categories?.[0]?.name || '').toLowerCase();
-  const catValue = (job.categories?.[0]?.value || '').toLowerCase();
-  const catString = `${catName} ${catValue}`;
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
 
-  // ৩. স্মার্ট কিওয়ার্ড ম্যাচিং
-  if (catString.includes('govt') || catString.includes('government') || catString.includes('সরকার')) {
-    return '/images/govt-default.png';
-  } else if (catString.includes('private') || catString.includes('company') || catString.includes('ngo') || catString.includes('বেসরকারি') || catString.includes('প্রাইভেট') || catString.includes('এনজিও')) {
-    return '/images/private-default.png';
-  } else if (catString.includes('bank') || catString.includes('ব্যাংক')) {
-    return '/images/bank-default.png'; // 🔴 এখানে .png করা হলো
-  } else {
-    return '/images/all-default.png';
-  }
-};
+function toBengaliDigits(num: number | string | null | undefined): string {
+  if (num === null || num === undefined) return '';
+  const digits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  return num.toString().replace(/\d/g, (x) => digits[Number(x)]);
+}
 
-// ✅ ডায়নামিক SEO মেটা ট্যাগ জেনারেট করার ফাংশন
-export async function generateMetadata({ params }: any) {
-  const { slug } = await params;
-  
+function isValidHttpUrl(stringUrl: string | null | undefined): boolean {
+  if (!stringUrl) return false;
   try {
-    const res = await fetch(`https://admin.jobsboxbd.com/api/v1/jobs/slug/${slug}`, { next: { revalidate: 3600 } });
-    const responseData = await res.json();
-    const job = responseData.data?.data || responseData.data;
-
-    if (!job) return { title: 'চাকরি পাওয়া যায়নি | দৈনিক চাকরি' };
-
-    const plainTextDescription = (job.description || job.details || job.body || '')
-      .replace(/<[^>]+>/g, '')
-      .substring(0, 160) + '...';
-      
-    // SEO এর জন্যও ডিফল্ট ইমেজ লজিক ব্যবহার করা
-    const ogImage = getHeadlineImage(job);
-
-    return {
-      title: `${job.title} | দৈনিক চাকরি`,
-      description: plainTextDescription,
-      openGraph: {
-        title: job.title,
-        description: plainTextDescription,
-        images: [ogImage],
-        type: 'article',
-      },
-    };
-  } catch (error) {
-    return { title: 'বিস্তারিত | দৈনিক চাকরি' };
+    const url = new URL(stringUrl);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
   }
 }
 
-// ✅ মূল পেজের কম্পোনেন্ট
-export default async function JobDetails({ params }: any) {
+export async function generateMetadata({ params }: JobDetailsProps): Promise<Metadata> {
   const { slug } = await params;
+  const job = await getJobDetail(slug);
 
-  let job = null;
-  let errorMessage = "";
-
-  try {
-    const apiUrl = `https://admin.jobsboxbd.com/api/v1/jobs/slug/${slug}`;
-    const res = await fetch(apiUrl, { cache: 'no-store' });
-
-    if (res.ok) {
-      const responseData = await res.json();
-      job = responseData.data?.data || responseData.data;
-    } else {
-      errorMessage = "চাকরির বিস্তারিত তথ্য পাওয়া যায়নি!";
-    }
-  } catch (error) {
-    errorMessage = "সার্ভারের সাথে কানেক্ট করা যাচ্ছেবিধা হচ্ছে না।";
+  if (!job) {
+    return {
+      title: 'চাকরি পাওয়া যায়নি | দৈনিক চাকরি',
+      description: 'অনুরোধকৃত চাকরির বিজ্ঞপ্তিটি পাওয়া যায়নি বা মেয়াদোত্তীর্ণ হয়েছে।',
+    };
   }
 
-  const jobDescription = job?.description || job?.details || job?.body || '';
+  const seoTitle = job.seo?.title || `${job.title} | দৈনিক চাকরি`;
+  const seoDescription =
+    job.seo?.description ||
+    stripHtml(job.description || '').substring(0, 160) ||
+    'চাকরির বিস্তারিত বিজ্ঞপ্তি ও আবেদন পদ্ধতি পড়ুন দৈনিক চাকরি ওয়েবসাইটে।';
 
-  const circularImages = [
-    job?.circular_image_1_url || job?.circular_image_1,
-    job?.circular_image_2_url || job?.circular_image_2,
-    job?.circular_image_3_url || job?.circular_image_3,
-    job?.circular_image_4_url || job?.circular_image_4,
-  ].filter(Boolean); 
-  
-  // 🔴 নতুন ফাংশন থেকে ডিসপ্লে করার জন্য ছবি নেওয়া
-  const displayImage = job ? getHeadlineImage(job) : '';
-  const isDefaultImage = displayImage.startsWith('/images/');
+  const canonicalUrl = `https://dailyjobs.bd/job/${job.slug}`;
+
+  return {
+    title: seoTitle,
+    description: seoDescription,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: seoTitle,
+      description: seoDescription,
+      url: canonicalUrl,
+      type: 'article',
+      publishedTime: job.published_at || undefined,
+      modifiedTime: job.updated_at || undefined,
+      ...(job.thumbnail_url ? { images: [{ url: job.thumbnail_url }] } : {}),
+    },
+  };
+}
+
+export default async function JobDetailsPage({ params }: JobDetailsProps) {
+  const { slug } = await params;
+  const job = await getJobDetail(slug);
+
+  if (!job) {
+    notFound();
+  }
+
+  const validApplyLink = isValidHttpUrl(job.apply_link) ? job.apply_link : null;
+  const images = (job.circular_images || []).filter((img) => Boolean(img.url));
 
   return (
-    <main className="min-h-screen bg-slate-50/80 py-8">
+    <div className="min-h-screen bg-slate-50/80 py-6 sm:py-10">
+      {/* ভিউ কাউন্ট প্রক্সি কম্পোনেন্ট (ডিডুপ্লিকেটেড সেশন ট্র্যাকার) */}
+      <ViewCounter jobId={job.id} />
+
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        
+
         {/* ব্যাক বাটন */}
-        <Link href="/" className="inline-flex items-center gap-2 text-slate-500 hover:text-orange-600 transition-colors mb-6 font-medium bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-          সকল চাকরিতে ফিরে যান
-        </Link>
+        <div className="mb-5 sm:mb-6">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-slate-600 hover:text-orange-600 transition-colors text-xs sm:text-sm font-semibold bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-2xs"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            সকল বিজ্ঞপ্তিতে ফিরে যান
+          </Link>
+        </div>
 
-        {errorMessage ? (
-          <div className="bg-red-50 text-red-600 p-8 rounded-2xl text-center border border-red-100 font-medium text-lg shadow-sm max-w-2xl mx-auto mt-10">
-            {errorMessage}
-          </div>
-        ) : (
-          job && (
-            <>
-              <ViewCounter jobId={job.id} />
+        <div className="flex flex-col lg:flex-row gap-6 lg:items-start">
 
-              <div className="flex flex-col lg:flex-row gap-6 lg:items-start">
-                
-                {/* মেইন কন্টেন্ট (বাম পাশ) */}
-                <div className="flex-grow lg:w-2/3 bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-                  
-                  {/* 🔴 আপডেট করা হেডলাইন ইমেজ সেকশন */}
-                  <div className={`w-full bg-slate-50 border-b border-slate-100 flex justify-center ${isDefaultImage ? '' : 'p-4 sm:p-6'}`}>
-                    <div className={`relative w-full ${isDefaultImage ? 'aspect-video' : 'h-[250px] sm:h-[300px]'}`}>
-                      <Image 
-                        src={displayImage} 
-                        alt={job.title} 
-                        fill
-                        className={`rounded-t-3xl ${isDefaultImage ? 'object-cover' : 'object-contain rounded-xl shadow-sm'}`}
-                        priority
-                      />
-                    </div>
-                  </div>
+          {/* মূল কন্টেন্ট (বাম পাশ) */}
+          <div className="grow lg:w-2/3 bg-white rounded-2xl sm:rounded-3xl shadow-xs border border-slate-100 overflow-hidden">
 
-                  <div className="p-6 sm:p-8 md:p-10">
-                    {/* ক্যাটাগরি */}
-                    {job.categories && job.categories.length > 0 && (
-                      <div className="mb-4">
-                        <span className="bg-orange-50 text-orange-600 border border-orange-100 text-xs font-bold px-3 py-1.5 rounded-md">
-                          {job.categories[0].name || job.categories[0].value}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* জব টাইটেল */}
-                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 mb-6 leading-tight">
-                      {job.title}
-                    </h1>
-                    
-                    {/* জব মেটা ইনফো */}
-                    <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-slate-600 mb-8 pb-6 border-b border-slate-100">
-                      <span className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                        প্রকাশ: {job.circular_date || 'জানা নেই'}
-                      </span>
-                      <span className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                        ভিউ: {job.web_views_count || 0}
-                      </span>
-                    </div>
-
-                    {/* বিস্তারিত বিবরণ (HTML Render) */}
-                    <div className="mb-10">
-                      <h3 className="text-xl font-bold text-slate-800 mb-4 border-l-4 border-orange-500 pl-3">বিজ্ঞপ্তির বিবরণ</h3>
-                      {jobDescription ? (
-                        <div 
-                          className="prose prose-slate max-w-none prose-headings:text-slate-800 prose-a:text-orange-600 hover:prose-a:text-orange-700 prose-img:rounded-xl prose-img:shadow-sm"
-                          dangerouslySetInnerHTML={{ __html: jobDescription }}
-                        />
-                      ) : (
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-slate-500">
-                          বিস্তারিত কোনো লিখিত তথ্য দেওয়া নেই। বিজ্ঞপ্তির ছবিগুলো দেখুন।
-                        </div>
-                      )}
-                    </div>
-
-                    {/* সার্কুলার ইমেজগুলো */}
-                    {circularImages.length > 0 && (
-                      <div className="mt-8">
-                        <h3 className="text-xl font-bold text-slate-800 mb-5 border-l-4 border-orange-500 pl-3">অফিশিয়াল বিজ্ঞপ্তি</h3>
-                        <div className="space-y-6">
-                          {circularImages.map((imgUrl, index) => (
-                            <img 
-                              key={index}
-                              src={imgUrl as string} 
-                              alt={`${job.title} - Circular ${index + 1}`} 
-                              className="w-full h-auto rounded-xl border border-slate-200 shadow-sm"
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+            {/* থাম্বনেইল ব্যানার (যদি থাকে) */}
+            {job.thumbnail_url && (
+              <div className="w-full bg-slate-50 border-b border-slate-100 p-4 sm:p-6 flex justify-center">
+                <div className="relative w-full max-w-sm h-48 sm:h-60">
+                  <Image
+                    src={job.thumbnail_url}
+                    alt={job.title}
+                    fill
+                    sizes="(max-width: 640px) 100vw, 400px"
+                    priority
+                    className="object-contain rounded-xl"
+                  />
                 </div>
-
-                {/* ডান পাশের সাইডবার (Apply Box) */}
-                <div className="lg:w-1/3 flex-shrink-0">
-                  <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 sm:p-8 sticky top-24">
-                    <h3 className="text-lg font-bold text-slate-900 mb-4 border-b border-slate-100 pb-3">আবেদন প্রক্রিয়া</h3>
-                    
-                    {job.circular_link ? (
-                      <>
-                        <p className="text-sm text-slate-500 mb-5 leading-relaxed">
-                          নিচের বাটনে ক্লিক করে সরাসরি অফিশিয়াল ওয়েবসাইটে গিয়ে অনলাইনে আবেদন সম্পন্ন করুন।
-                        </p>
-                        <a 
-                          href={job.circular_link} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-3.5 px-4 rounded-xl transition-all shadow-md hover:shadow-lg"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-                          অনলাইনে আবেদন করুন
-                        </a>
-                      </>
-                    ) : (
-                      <div className="bg-orange-50/50 border border-orange-100 rounded-xl p-5 text-center">
-                        <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        </div>
-                        <p className="text-sm font-semibold text-slate-800 mb-2">অনলাইন আবেদন লিংক নেই</p>
-                        <p className="text-sm text-slate-600 leading-relaxed">
-                          এই চাকরিটিতে অনলাইনে আবেদনের কোনো লিংক দেওয়া নেই। অনুগ্রহ করে বিজ্ঞপ্তির বিস্তারিত বিবরণ বা ছবি পড়ে আবেদনের নিয়মাবলী জেনে নিন।
-                        </p>
-                      </div>
-                    )}
-
-                    {/* শেয়ার বাটন */}
-                    <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-                      <p className="text-xs text-slate-400 mb-3 font-medium uppercase tracking-wider">বন্ধুদের সাথে শেয়ার করুন</p>
-                      <div className="flex justify-center gap-3">
-                        <button className="w-10 h-10 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-blue-600 hover:bg-blue-50 transition-colors">
-                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                        </button>
-                        <button className="w-10 h-10 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-green-500 hover:bg-green-50 transition-colors">
-                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
-                        </button>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-
               </div>
-            </>
-          )
-        )}
+            )}
+
+            <div className="p-5 sm:p-8 md:p-10">
+
+              {/* ক্যাটাগরি ব্যাজ */}
+              {job.category && (
+                <div className="mb-3">
+                  <Link
+                    href={`/category/${job.category.slug}`}
+                    className="bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-100 text-xs font-bold px-3 py-1 rounded-md transition-colors"
+                  >
+                    {job.category.name}
+                  </Link>
+                </div>
+              )}
+
+              {/* জব টাইটেল */}
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 mb-3 leading-snug">
+                {job.title}
+              </h1>
+
+              {/* প্রতিষ্ঠান */}
+              {job.organization_name && (
+                <p className="text-base sm:text-lg font-semibold text-slate-700 mb-6">
+                  {job.organization_name}
+                </p>
+              )}
+
+              {/* মূল তথ্য হাইলাইট গ্রিড */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs sm:text-sm text-slate-700 mb-8">
+                {job.circular_published_date && (
+                  <div>
+                    <span className="text-slate-400 block text-[11px] mb-0.5">প্রকাশের তারিখ</span>
+                    <span className="font-bold">{job.circular_published_date}</span>
+                  </div>
+                )}
+                {job.deadline && (
+                  <div>
+                    <span className="text-slate-400 block text-[11px] mb-0.5">আবেদনের শেষ তারিখ</span>
+                    <span className="font-bold text-red-600">{job.deadline}</span>
+                  </div>
+                )}
+                {job.vacancies !== null && job.vacancies > 0 && (
+                  <div>
+                    <span className="text-slate-400 block text-[11px] mb-0.5">মোট পদসংখ্যা</span>
+                    <span className="font-bold">{toBengaliDigits(job.vacancies)} জন</span>
+                  </div>
+                )}
+                {job.location && (
+                  <div>
+                    <span className="text-slate-400 block text-[11px] mb-0.5">কর্মস্থল</span>
+                    <span className="font-bold">{job.location}</span>
+                  </div>
+                )}
+                {job.application_method && (
+                  <div>
+                    <span className="text-slate-400 block text-[11px] mb-0.5">আবেদনের মাধ্যম</span>
+                    <span className="font-bold capitalize">{job.application_method}</span>
+                  </div>
+                )}
+                {job.days_left !== null && (
+                  <div>
+                    <span className="text-slate-400 block text-[11px] mb-0.5">বাকি সময়</span>
+                    <span className={`font-bold ${job.days_left <= 3 ? 'text-red-600' : 'text-slate-800'}`}>
+                      {job.days_left < 0
+                        ? 'সময় শেষ'
+                        : job.days_left === 0
+                        ? 'আজই শেষ দিন'
+                        : `${toBengaliDigits(job.days_left)} দিন বাকি`}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* বিস্তারিত বিবরণ (স্যানিটাইজড এইচটিএমএল) */}
+              <div className="mb-10">
+                <h2 className="text-lg sm:text-xl font-bold text-slate-900 mb-4 border-l-4 border-orange-500 pl-3">
+                  বিজ্ঞপ্তির বিস্তারিত বিবরণ
+                </h2>
+                {job.description ? (
+                  <div
+                    className="prose prose-slate max-w-none text-slate-700 text-sm sm:text-base leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(job.description) }}
+                  />
+                ) : (
+                  <p className="text-slate-500 text-sm italic bg-slate-50 p-4 rounded-xl">
+                    বিজ্ঞপ্তির লিখিত বিবরণ দেওয়া নেই। অনুগ্রহ করে নিচে সংযুক্ত অফিশিয়াল সার্কুলার চিত্র দেখুন।
+                  </p>
+                )}
+              </div>
+
+              {/* সার্কুলার ইমেজ গ্যালারি */}
+              {images.length > 0 && (
+                <div className="mt-8 pt-8 border-t border-slate-100">
+                  <h2 className="text-lg sm:text-xl font-bold text-slate-900 mb-4 border-l-4 border-orange-500 pl-3">
+                    অফিশিয়াল সার্কুলার বিজ্ঞপ্তি ({toBengaliDigits(images.length)} টি পাতা)
+                  </h2>
+                  <div className="space-y-6">
+                    {images.map((img, idx) => (
+                      <div key={img.page_number || idx} className="rounded-xl overflow-hidden border border-slate-200 shadow-xs">
+                        <div className="bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600 border-b border-slate-200">
+                          পাতা নং: {toBengaliDigits(img.page_number || idx + 1)}
+                        </div>
+                        {/* Using standard img with lazy loading to preserve document aspect ratio & full scan readability */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={img.url!}
+                          alt={`${job.title} - সার্কুলার পাতা ${img.page_number || idx + 1}`}
+                          className="w-full h-auto object-contain block bg-white"
+                          loading="lazy"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+
+          {/* ডান পাশের আবেদন বক্স (সাইডবার) */}
+          <div className="lg:w-1/3 shrink-0 w-full">
+            <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xs border border-slate-100 p-5 sm:p-6 sticky top-24 space-y-5">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">
+                আবেদন প্রক্রিয়া
+              </h3>
+
+              {validApplyLink ? (
+                <>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    নিচের বাটনে ক্লিক করে অফিশিয়াল নিয়োগকারী ওয়েবসাইটে গিয়ে সরাসরি আবেদন সম্পন্ন করুন।
+                  </p>
+                  <a
+                    href={validApplyLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-sm text-sm sm:text-base text-center"
+                  >
+                    <span>অনলাইনে আবেদন করুন</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                </>
+              ) : (
+                <div className="bg-orange-50/70 border border-orange-100 rounded-xl p-4 text-center">
+                  <p className="text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+                    সরাসরি অনলাইন লিংক নেই
+                  </p>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    এই পদটিতে আবেদনের নিয়মাবলী জানতে বিজ্ঞপ্তির বিবরণ বা অফিশিয়াল সার্কুলার চিত্র দেখুন।
+                  </p>
+                </div>
+              )}
+
+              {/* আবেদনের বিশেষ নির্দেশনা */}
+              {job.application_instructions && (
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-xs text-slate-600 space-y-1">
+                  <strong className="text-slate-800 block">আবেদনের নিয়ম:</strong>
+                  <p className="leading-relaxed">{job.application_instructions}</p>
+                </div>
+              )}
+
+              {/* সতর্কবার্তা */}
+              <div className="text-[11px] text-slate-400 border-t border-slate-100 pt-4 leading-normal">
+                ⚠️ আবেদন করার পূর্বে সার্কুলারে উল্লেখিত শিক্ষাগত যোগ্যতা ও শর্তাবলী মনোযোগ সহকারে পড়ে নিন।
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
       </div>
-    </main>
+    </div>
   );
 }

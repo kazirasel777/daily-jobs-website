@@ -1,51 +1,112 @@
-// File: src/components/Header.tsx
+// File: components/Header.tsx
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 
+const NAV_LINKS = [
+  { href: '/', label: 'হোম' },
+  { href: '/category/govt_jobs', label: 'সরকারি চাকরি' },
+  { href: '/category/bank_jobs', label: 'ব্যাংক জবস' },
+  { href: '/category/private_jobs', label: 'প্রাইভেট চাকরি' },
+  { href: '/question-bank', label: 'প্রশ্ন ব্যাংক' },
+  { href: '/current-affairs', label: 'সাম্প্রতিক' },
+];
+
 export default function Header() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
-      {/* max-w-6xl থেকে max-w-7xl করা হয়েছে প্রস্থ বাড়ানোর জন্য */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center h-16">
+    <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
         
         {/* লোগো */}
-        <Link href="/" className="flex items-center group">
-          <Image 
-            src="/daily_jobs_logo.png" 
-            alt="DailyJobs Logo" 
-            width={200} 
-            height={50} 
+        <Link href="/" className="flex items-center gap-2 group">
+          <Image
+            src="/daily_jobs_logo.png"
+            alt="দৈনিক চাকরি লোগো"
+            width={160}
+            height={40}
             priority
-            className="w-auto h-12 object-contain transition-transform group-hover:scale-105" 
+            className="w-auto h-10 sm:h-11 object-contain transition-transform group-hover:scale-102"
           />
         </Link>
 
-        {/* নেভিগেশন মেনু (মাঝখানে থাকবে) - ডেস্কটপের জন্য */}
-        <nav className="hidden md:flex gap-6 lg:gap-8 font-medium text-slate-700">
-          <Link href="/" className="hover:text-orange-600 transition-colors">হোম</Link>
-          <Link href="/jobs" className="hover:text-orange-600 transition-colors">সকল চাকরি</Link>
-          <Link href="/category/govt" className="hover:text-orange-600 transition-colors">সরকারি চাকরি</Link>
-          <Link href="/category/private" className="hover:text-orange-600 transition-colors">প্রাইভেট চাকরি</Link>
+        {/* ডেস্কটপ নেভিগেশন মেনু */}
+        <nav className="hidden md:flex items-center gap-5 lg:gap-7 font-medium text-slate-700 text-sm">
+          {NAV_LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="hover:text-orange-600 transition-colors py-1"
+            >
+              {link.label}
+            </Link>
+          ))}
         </nav>
 
-        {/* ডানদিকের বাটন (লগইনের বদলে 'চাকরি খুঁজুন' বাটন) */}
-        <div className="flex items-center gap-4">
-          <Link 
-            href="/jobs" 
-            className="hidden sm:inline-flex bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100 px-5 py-2 rounded-lg text-sm font-semibold transition-colors"
+        {/* ডানদিকের সার্চ শর্টকাট ও মোবাইল বাটন */}
+        <div className="flex items-center gap-3">
+          <Link
+            href="/#search-section"
+            className="hidden sm:inline-flex items-center gap-1.5 bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors"
           >
-            সার্কুলার খুঁজুন
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            সার্চ করুন
           </Link>
 
-          {/* মোবাইল মেনু বাটন (ছোট স্ক্রিনের জন্য) */}
-          <button className="md:hidden text-slate-600 hover:text-slate-900 p-2">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+          {/* মোবাইল মেনু টগল বাটন */}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden text-slate-600 hover:text-slate-900 p-2 rounded-lg hover:bg-slate-100 transition-colors focus:outline-hidden focus:ring-2 focus:ring-orange-500"
+            aria-expanded={mobileMenuOpen}
+            aria-label="মেনু খুলুন"
+          >
+            {mobileMenuOpen ? (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            )}
           </button>
         </div>
 
       </div>
+
+      {/* মোবাইল মেনু ড্রয়ার */}
+      {mobileMenuOpen && (
+        <div className="md:hidden border-t border-slate-200 bg-white px-4 pt-3 pb-5 space-y-2 shadow-lg animate-fadeIn">
+          {NAV_LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-3 py-2 rounded-lg text-base font-semibold text-slate-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+            >
+              {link.label}
+            </Link>
+          ))}
+          <div className="pt-2 border-t border-slate-100">
+            <Link
+              href="/#search-section"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center justify-center gap-2 w-full bg-orange-600 text-white py-2.5 rounded-lg text-sm font-bold shadow-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              চাকরি খুঁজুন
+            </Link>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
