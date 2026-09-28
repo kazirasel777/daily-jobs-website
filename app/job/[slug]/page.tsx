@@ -79,8 +79,38 @@ export default async function JobDetailsPage({ params }: JobDetailsProps) {
   const validApplyLink = isValidHttpUrl(job.apply_link) ? job.apply_link : null;
   const images = (job.circular_images || []).filter((img) => Boolean(img.url));
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'JobPosting',
+    title: job.title,
+    description: job.description ? stripHtml(job.description) : job.title,
+    datePosted: job.published_at || undefined,
+    validThrough: job.deadline ? `${job.deadline}T23:59:59+06:00` : undefined,
+    employmentType: 'FULL_TIME',
+    hiringOrganization: {
+      '@type': 'Organization',
+      name: job.organization_name || 'দৈনিক চাকরি',
+    },
+    jobLocation: {
+      '@type': 'Place',
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: job.location || 'ঢাকা',
+        addressCountry: 'BD',
+      },
+    },
+    ...(job.thumbnail_url ? { image: job.thumbnail_url } : {}),
+    ...(validApplyLink ? { directApply: true } : {}),
+  };
+
   return (
     <div className="min-h-screen bg-slate-50/80 py-6 sm:py-10">
+      {/* Schema.org JobPosting Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
       {/* ভিউ কাউন্ট প্রক্সি কম্পোনেন্ট (ডিডুপ্লিকেটেড সেশন ট্র্যাকার) */}
       <ViewCounter jobId={job.id} />
 

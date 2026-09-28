@@ -50,3 +50,61 @@ test('API query builder caps per_page at 50 to avoid Laravel 422 validation erro
   assert.equal(query.includes('per_page=50'), true);
   assert.equal(query.includes('per_page=100'), false);
 });
+
+// Sitemap date validation simulation
+function parseValidDate(dateValue) {
+  if (!dateValue) return undefined;
+  const parsed = new Date(dateValue);
+  return isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+test('Sitemap date parser returns valid Date for ISO timestamp', () => {
+  const parsed = parseValidDate('2026-03-15T10:30:00Z');
+  assert.ok(parsed instanceof Date);
+  assert.equal(parsed.toISOString(), '2026-03-15T10:30:00.000Z');
+});
+
+test('Sitemap date parser returns undefined for null, empty, or invalid date', () => {
+  assert.equal(parseValidDate(null), undefined);
+  assert.equal(parseValidDate(''), undefined);
+  assert.equal(parseValidDate('not-a-real-date'), undefined);
+});
+
+test('Sitemap job entry omits lastModified when date is missing or invalid', () => {
+  const baseUrl = 'https://dailyjobs.bd';
+  const job = { id: 12, slug: 'test-job', published_at: null };
+  const validDate = parseValidDate(job.published_at);
+
+  const entry = {
+    url: `${baseUrl}/job/${job.slug || job.id}`,
+    changeFrequency: 'daily',
+    priority: 0.8,
+  };
+  if (validDate) {
+    entry.lastModified = validDate;
+  }
+
+  assert.equal(entry.url, 'https://dailyjobs.bd/job/test-job');
+  assert.equal(entry.lastModified, undefined);
+  assert.equal('lastModified' in entry, false);
+});
+
+test('Sitemap job entry includes valid lastModified when published_at is valid ISO string', () => {
+  const baseUrl = 'https://dailyjobs.bd';
+  const job = { id: 15, slug: 'govt-officer', published_at: '2026-03-20T08:00:00Z' };
+  const validDate = parseValidDate(job.published_at);
+
+  const entry = {
+    url: `${baseUrl}/job/${job.slug || job.id}`,
+    changeFrequency: 'daily',
+    priority: 0.8,
+  };
+  if (validDate) {
+    entry.lastModified = validDate;
+  }
+
+  assert.equal(entry.url, 'https://dailyjobs.bd/job/govt-officer');
+  assert.ok(entry.lastModified instanceof Date);
+  assert.equal(entry.lastModified.toISOString(), '2026-03-20T08:00:00.000Z');
+});
+

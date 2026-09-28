@@ -18,6 +18,7 @@ export interface JobListItem {
   deadline: string | null;
   days_left: number | null;
   published_at: string | null;
+  updated_at?: string | null;
   recently_added: boolean;
   thumbnail_url: string | null;
 }
