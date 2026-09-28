@@ -108,3 +108,155 @@ test('Sitemap job entry includes valid lastModified when published_at is valid I
   assert.equal(entry.lastModified.toISOString(), '2026-03-20T08:00:00.000Z');
 });
 
+// JobPosting validation logic simulation for contract tests
+function stripHtml(html) {
+  return (html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function getValidJobPostingSchema(job) {
+  const orgName = job.organization_name?.trim();
+  if (!orgName || /dailyjobs|দৈনিক\s*চাকরি/i.test(orgName)) {
+    return null;
+  }
+  const location = job.location?.trim();
+  if (!location) {
+    return null;
+  }
+  if (job.days_left !== null && job.days_left < 0) {
+    return null;
+  }
+  if (!job.deadline) {
+    return null;
+  }
+  const validThroughDate = new Date(`${job.deadline}T23:59:59+06:00`);
+  if (isNaN(validThroughDate.getTime()) || validThroughDate.getTime() < Date.now()) {
+    return null;
+  }
+  const title = (job.title || '').trim();
+  const multiPostPatterns = /বিভিন্ন\s*পদ|একাধিক\s*পদ|বহু\s*পদ/i;
+  if (multiPostPatterns.test(title)) {
+    return null;
+  }
+  const cleanDesc = stripHtml(job.description || '').trim();
+  if (cleanDesc.length < 60) {
+    return null;
+  }
+  const rawDate = job.published_at || job.circular_published_date;
+  if (!rawDate) {
+    return null;
+  }
+  const postedDate = new Date(rawDate);
+  if (isNaN(postedDate.getTime())) {
+    return null;
+  }
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'JobPosting',
+    title: title,
+    description: cleanDesc,
+    datePosted: postedDate.toISOString(),
+    validThrough: validThroughDate.toISOString(),
+    hiringOrganization: {
+      '@type': 'Organization',
+      name: orgName,
+    },
+    jobLocation: {
+      '@type': 'Place',
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: location,
+        addressCountry: 'BD',
+      },
+    },
+  };
+}
+
+test('JobPosting validator accepts eligible single job and rejects speculative fields', () => {
+  const futureDeadline = new Date(Date.now() + 86400000 * 5).toISOString().split('T')[0];
+  const eligibleJob = {
+    title: 'চিফ হিউম্যান রিসোর্স অফিসার (CHRO)',
+    organization_name: 'নর্থ সাউথ বিশ্ববিদ্যালয়',
+    location: 'ঢাকা',
+    days_left: 5,
+    deadline: futureDeadline,
+    published_at: '2026-09-20T10:00:00Z',
+    description: '<p>নর্থ সাউথ বিশ্ববিদ্যালয়ে চিফ হিউম্যান রিসোর্স অফিসার পদে অভিজ্ঞতা সম্পন্ন প্রার্থী আবশ্যক। প্রার্থীর অবশ্যই সংশ্লিষ্ট ক্ষেত্রে অন্তত ১০ বছরের অভিজ্ঞতা থাকতে হবে।</p>',
+  };
+
+  const schema = getValidJobPostingSchema(eligibleJob);
+  assert.ok(schema !== null);
+  assert.equal(schema['@type'], 'JobPosting');
+  assert.equal(schema.hiringOrganization.name, 'নর্থ সাউথ বিশ্ববিদ্যালয়');
+  assert.equal(schema.jobLocation.address.addressLocality, 'ঢাকা');
+  assert.equal('directApply' in schema, false, 'Must not assume directApply');
+  assert.equal('employmentType' in schema, false, 'Must not assume employmentType');
+});
+
+test('JobPosting validator rejects multi-role circulars ("বিভিন্ন পদে")', () => {
+  const futureDeadline = new Date(Date.now() + 86400000 * 5).toISOString().split('T')[0];
+  const multiJob = {
+    title: 'কর অঞ্চল-১৬ ঢাকায় বিভিন্ন পদে ৫৯ জন নিয়োগ',
+    organization_name: 'কর অঞ্চল-১৬, ঢাকা',
+    location: 'ঢাকা',
+    days_left: 5,
+    deadline: futureDeadline,
+    published_at: '2026-09-20T10:00:00Z',
+    description: '<p>কর অঞ্চল-১৬ ঢাকায় বিভিন্ন পদে নিয়োগ বিজ্ঞপ্তি প্রকাশ করা হয়েছে। যোগ্য প্রার্থীদের আবেদন করতে বলা যাচ্ছে।</p>',
+  };
+
+  assert.equal(getValidJobPostingSchema(multiJob), null);
+});
+
+test('JobPosting validator rejects placeholder/missing employer', () => {
+  const futureDeadline = new Date(Date.now() + 86400000 * 5).toISOString().split('T')[0];
+  const noEmployer = {
+    title: 'হিসাবরক্ষক পদে নিয়োগ',
+    organization_name: 'দৈনিক চাকরি',
+    location: 'ঢাকা',
+    days_left: 5,
+    deadline: futureDeadline,
+    published_at: '2026-09-20T10:00:00Z',
+    description: '<p>হিসাবরক্ষক পদে অভিজ্ঞতা সম্পন্ন প্রার্থী আবশ্যক। যোগ্য প্রার্থীদের দ্রুত আবেদন করার আহ্বান জানানো হচ্ছে।</p>',
+  };
+
+  assert.equal(getValidJobPostingSchema(noEmployer), null);
+});
+
+test('JobPosting validator rejects expired jobs', () => {
+  const expiredJob = {
+    title: 'হিসাবরক্ষক পদে নিয়োগ',
+    organization_name: 'এবিসি কোম্পানি',
+    location: 'ঢাকা',
+    days_left: -1,
+    deadline: '2026-01-01',
+    published_at: '2025-12-01T10:00:00Z',
+    description: '<p>হিসাবরক্ষক পদে অভিজ্ঞতা সম্পন্ন প্রার্থী আবশ্যক। যোগ্য প্রার্থীদের দ্রুত আবেদন করার আহ্বান জানানো হচ্ছে।</p>',
+  };
+
+  assert.equal(getValidJobPostingSchema(expiredJob), null);
+});
+
+test('JobPosting validator rejects short or missing descriptions', () => {
+  const futureDeadline = new Date(Date.now() + 86400000 * 5).toISOString().split('T')[0];
+  const shortDescJob = {
+    title: 'হিসাবরক্ষক পদে নিয়োগ',
+    organization_name: 'এবিসি কোম্পানি',
+    location: 'ঢাকা',
+    days_left: 5,
+    deadline: futureDeadline,
+    published_at: '2026-09-20T10:00:00Z',
+    description: '<p>বিজ্ঞপ্তি দেখুন।</p>',
+  };
+
+  assert.equal(getValidJobPostingSchema(shortDescJob), null);
+});
+
+test('JobPosting JSON-LD safely escapes < characters in HTML output', () => {
+  const sample = { title: 'Tester <script>alert(1)</script>' };
+  const serialized = JSON.stringify(sample).replace(/</g, '\\u003c');
+  assert.equal(serialized.includes('<script>'), false);
+  assert.equal(serialized.includes('\\u003cscript>'), true);
+});
+
+

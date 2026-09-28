@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 import ViewCounter from '@/components/ViewCounter';
 import { getJobDetail } from '@/lib/api';
 import { sanitizeRichText } from '@/lib/sanitize';
+import type { JobDetail } from '@/types/job';
 
 interface JobDetailsProps {
   params: Promise<{ slug: string }>;
@@ -68,6 +69,84 @@ export async function generateMetadata({ params }: JobDetailsProps): Promise<Met
   };
 }
 
+function getValidJobPostingSchema(job: JobDetail): Record<string, unknown> | null {
+  // 1. Hiring Organization must exist and be a genuine employer (never DailyJobs or portal placeholder)
+  const orgName = job.organization_name?.trim();
+  if (!orgName || /dailyjobs|দৈনিক\s*চাকরি/i.test(orgName)) {
+    return null;
+  }
+
+  // 2. Real specific job location must exist (never default to ঢাকা or Bangladesh)
+  const location = job.location?.trim();
+  if (!location) {
+    return null;
+  }
+
+  // 3. Must be currently active (not expired)
+  if (job.days_left !== null && job.days_left < 0) {
+    return null;
+  }
+  if (!job.deadline) {
+    return null;
+  }
+  const validThroughDate = new Date(`${job.deadline}T23:59:59+06:00`);
+  if (isNaN(validThroughDate.getTime()) || validThroughDate.getTime() < Date.now()) {
+    return null;
+  }
+
+  // 4. Must NOT be a multi-role or broad collective circular
+  // Google guidelines: "Do not create a single JobPosting for multiple jobs or a career fair."
+  const title = job.title.trim();
+  const multiPostPatterns = /বিভিন্ন\s*পদ|একাধিক\s*পদ|বহু\s*পদ/i;
+  if (multiPostPatterns.test(title)) {
+    return null;
+  }
+
+  // 5. Must have a real, substantive text description (Google requires full description, not empty/tiny placeholder)
+  const cleanDesc = stripHtml(job.description || '').trim();
+  if (cleanDesc.length < 60) {
+    return null;
+  }
+
+  // 6. Must have a valid publication date
+  const rawDate = job.published_at || job.circular_published_date;
+  if (!rawDate) {
+    return null;
+  }
+  const postedDate = new Date(rawDate);
+  if (isNaN(postedDate.getTime())) {
+    return null;
+  }
+
+  // Build strictly compliant, truthful schema without speculative fields (no assumed directApply or assumed FULL_TIME)
+  const schema: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'JobPosting',
+    title: title,
+    description: cleanDesc,
+    datePosted: postedDate.toISOString(),
+    validThrough: validThroughDate.toISOString(),
+    hiringOrganization: {
+      '@type': 'Organization',
+      name: orgName,
+    },
+    jobLocation: {
+      '@type': 'Place',
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: location,
+        addressCountry: 'BD',
+      },
+    },
+  };
+
+  if (job.thumbnail_url) {
+    schema.image = job.thumbnail_url;
+  }
+
+  return schema;
+}
+
 export default async function JobDetailsPage({ params }: JobDetailsProps) {
   const { slug } = await params;
   const job = await getJobDetail(slug);
@@ -78,38 +157,19 @@ export default async function JobDetailsPage({ params }: JobDetailsProps) {
 
   const validApplyLink = isValidHttpUrl(job.apply_link) ? job.apply_link : null;
   const images = (job.circular_images || []).filter((img) => Boolean(img.url));
-
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'JobPosting',
-    title: job.title,
-    description: job.description ? stripHtml(job.description) : job.title,
-    datePosted: job.published_at || undefined,
-    validThrough: job.deadline ? `${job.deadline}T23:59:59+06:00` : undefined,
-    employmentType: 'FULL_TIME',
-    hiringOrganization: {
-      '@type': 'Organization',
-      name: job.organization_name || 'দৈনিক চাকরি',
-    },
-    jobLocation: {
-      '@type': 'Place',
-      address: {
-        '@type': 'PostalAddress',
-        addressLocality: job.location || 'ঢাকা',
-        addressCountry: 'BD',
-      },
-    },
-    ...(job.thumbnail_url ? { image: job.thumbnail_url } : {}),
-    ...(validApplyLink ? { directApply: true } : {}),
-  };
+  const jobPostingSchema = getValidJobPostingSchema(job);
 
   return (
     <div className="min-h-screen bg-slate-50/80 py-6 sm:py-10">
-      {/* Schema.org JobPosting Structured Data */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      {/* Schema.org JobPosting Structured Data: Only rendered for single, open, fully-detailed jobs */}
+      {jobPostingSchema && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(jobPostingSchema).replace(/</g, '\\u003c'),
+          }}
+        />
+      )}
 
       {/* ভিউ কাউন্ট প্রক্সি কম্পোনেন্ট (ডিডুপ্লিকেটেড সেশন ট্র্যাকার) */}
       <ViewCounter jobId={job.id} />

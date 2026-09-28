@@ -47,7 +47,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     let currentPage = 1;
     let lastPage = 1;
-    const MAX_PAGES_TO_FETCH = 20; // Safe cap (up to 1,000 published jobs)
+    const MAX_PAGES_SAFETY_CAP = 100; // Safe upper bound (up to 5,000 published jobs)
     let latestJobDate: Date | undefined;
 
     do {
@@ -69,8 +69,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
         const entry: MetadataRoute.Sitemap[number] = {
           url: `${baseUrl}/job/${job.slug || job.id}`,
-          changeFrequency: 'daily',
-          priority: 0.8,
         };
 
         if (validDate) {
@@ -81,7 +79,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }
 
       currentPage++;
-    } while (currentPage <= lastPage && currentPage <= MAX_PAGES_TO_FETCH);
+    } while (currentPage <= lastPage && currentPage <= MAX_PAGES_SAFETY_CAP);
+
+    if (lastPage > MAX_PAGES_SAFETY_CAP) {
+      console.warn(`[Sitemap Warning] Total pages (${lastPage}) exceeded safety cap (${MAX_PAGES_SAFETY_CAP}). Consider partitioning into a sitemap index.`);
+    }
 
     // If we have a latest job timestamp, use it as homepage lastModified
     if (latestJobDate && staticUrls[0]) {
