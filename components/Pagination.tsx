@@ -1,130 +1,58 @@
 // File: components/Pagination.tsx
-'use client';
-
+// Server-rendered pagination with real <a href> links so crawlers can follow every page.
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import Icon from '@/components/Icon';
+import { toBnDigits } from '@/lib/format';
 
 interface PaginationProps {
   currentPage: number;
   lastPage: number;
+  /** Builds the URL for a page number (page 1 should have no ?page parameter). */
+  hrefFor: (page: number) => string;
 }
 
-const toBengaliNumber = (num: number | string) => {
-  if (num === '...') return '...';
-  const digits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
-  return num.toString().replace(/\d/g, (x) => digits[Number(x)]);
-};
+function pageList(current: number, last: number): (number | 'gap')[] {
+  if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+  const pages = new Set([1, last, current - 1, current, current + 1]);
+  if (current <= 3) [2, 3, 4].forEach((p) => pages.add(p));
+  if (current >= last - 2) [last - 3, last - 2, last - 1].forEach((p) => pages.add(p));
+  const sorted = [...pages].filter((p) => p >= 1 && p <= last).sort((a, b) => a - b);
+  const out: (number | 'gap')[] = [];
+  sorted.forEach((p, i) => {
+    if (i > 0 && p - sorted[i - 1] > 1) out.push('gap');
+    out.push(p);
+  });
+  return out;
+}
 
-export default function Pagination({ currentPage, lastPage }: PaginationProps) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+const base = 'inline-flex h-10 min-w-10 items-center justify-center rounded-xl px-3 text-sm font-bold';
 
+export default function Pagination({ currentPage, lastPage, hrefFor }: PaginationProps) {
   if (lastPage <= 1) return null;
 
-  const createPageURL = (pageNumber: number | string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('page', pageNumber.toString());
-    return `${pathname}?${params.toString()}`;
-  };
-
-  const getPages = () => {
-    if (lastPage <= 7) {
-      return Array.from({ length: lastPage }, (_, i) => i + 1);
-    }
-
-    if (currentPage <= 4) {
-      return [1, 2, 3, 4, 5, '...', lastPage];
-    }
-
-    if (currentPage >= lastPage - 3) {
-      return [1, '...', lastPage - 4, lastPage - 3, lastPage - 2, lastPage - 1, lastPage];
-    }
-
-    return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', lastPage];
-  };
-
-  const pages = getPages();
-
   return (
-    <nav aria-label="Pagination" className="flex justify-center items-center gap-1.5 sm:gap-2 mt-10 mb-6">
-      
-      {/* ⬅️ Previous Button */}
-      {currentPage > 1 ? (
-        <Link
-          href={createPageURL(currentPage - 1)}
-          className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 transition-all shadow-xs"
-          aria-label="পূর্ববর্তী পৃষ্ঠা"
-        >
-          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
+    <nav aria-label="পৃষ্ঠা নির্বাচন" className="mt-8 flex flex-wrap items-center justify-center gap-1.5">
+      {currentPage > 1 && (
+        <Link href={hrefFor(currentPage - 1)} rel="prev" className={`${base} gap-1 border border-line bg-surface text-ink-soft hover:border-brand-600 hover:text-brand-700`}>
+          <Icon name="chevronLeft" /> আগের
         </Link>
-      ) : (
-        <span
-          className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-50 border border-slate-100 text-slate-300 cursor-not-allowed"
-          aria-hidden="true"
-        >
-          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </span>
       )}
-
-      {/* 🔢 Page Numbers */}
-      <div className="flex items-center gap-1 sm:gap-1.5">
-        {pages.map((page, index) => {
-          if (page === '...') {
-            return (
-              <span
-                key={`ellipsis-${index}`}
-                className="flex items-center justify-center w-7 h-9 text-slate-400 font-bold tracking-widest text-xs"
-              >
-                ...
-              </span>
-            );
-          }
-
-          const isActive = page === currentPage;
-
-          return (
-            <Link
-              key={page}
-              href={createPageURL(page)}
-              aria-current={isActive ? 'page' : undefined}
-              className={`flex items-center justify-center w-8 h-9 sm:w-10 sm:h-10 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-                isActive
-                  ? 'bg-orange-600 text-white shadow-xs'
-                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300'
-              }`}
-            >
-              {toBengaliNumber(page)}
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* ➡️ Next Button */}
-      {currentPage < lastPage ? (
-        <Link
-          href={createPageURL(currentPage + 1)}
-          className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 transition-all shadow-xs"
-          aria-label="পরবর্তী পৃষ্ঠা"
-        >
-          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+      {pageList(currentPage, lastPage).map((p, i) =>
+        p === 'gap' ? (
+          <span key={`gap-${i}`} className="px-1 text-muted" aria-hidden="true">…</span>
+        ) : p === currentPage ? (
+          <span key={p} aria-current="page" className={`${base} bg-brand-800 text-white`}>{toBnDigits(p)}</span>
+        ) : (
+          <Link key={p} href={hrefFor(p)} aria-label={`পৃষ্ঠা ${toBnDigits(p)}`} className={`${base} border border-line bg-surface text-ink-soft hover:border-brand-600 hover:text-brand-700`}>
+            {toBnDigits(p)}
+          </Link>
+        ),
+      )}
+      {currentPage < lastPage && (
+        <Link href={hrefFor(currentPage + 1)} rel="next" className={`${base} gap-1 border border-line bg-surface text-ink-soft hover:border-brand-600 hover:text-brand-700`}>
+          পরের <Icon name="chevronRight" />
         </Link>
-      ) : (
-        <span
-          className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-50 border border-slate-100 text-slate-300 cursor-not-allowed"
-          aria-hidden="true"
-        >
-          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </span>
       )}
-
     </nav>
   );
 }

@@ -1,25 +1,143 @@
 @import "tailwindcss";
 
+/* DailyJobs design tokens: deep "ledger" green for trust, marigold for attention,
+   warm paper background for long-form reading. */
+@theme {
+  --font-sans: var(--font-bn-sans), 'Noto Sans Bengali', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: var(--font-bn-serif), 'Noto Serif Bengali', Georgia, serif;
+
+  --color-paper: #f7f5ef;
+  --color-surface: #ffffff;
+  --color-line: #e4dfd2;
+  --color-line-strong: #cfc8b6;
+  --color-ink: #17221d;
+  --color-ink-soft: #3d4a43;
+  --color-muted: #5f6b64;
+
+  --color-brand-50: #eef6f1;
+  --color-brand-100: #d6eadf;
+  --color-brand-200: #acd3be;
+  --color-brand-600: #16784f;
+  --color-brand-700: #106241;
+  --color-brand-800: #0d4f36;
+  --color-brand-900: #0a3a28;
+  --color-brand-950: #062519;
+
+  --color-marigold-50: #fff8e5;
+  --color-marigold-100: #fdecbf;
+  --color-marigold-300: #f4c75a;
+  --color-marigold-500: #e3a018;
+  --color-marigold-700: #9a6503;
+  --color-marigold-900: #5c3c03;
+
+  --color-alert-50: #fdf0ee;
+  --color-alert-600: #c2321f;
+  --color-alert-700: #a1281a;
+}
+
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: 5rem;
+  }
   body {
-    font-family: 'SolaimanLipi', 'Kalpurush', 'Noto Sans Bengali', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    color: #1e293b;
-    background-color: #f8fafc;
+    font-family: var(--font-sans);
+    color: var(--color-ink);
+    background-color: var(--color-paper);
+    line-height: 1.7;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, h4 {
+    line-height: 1.35;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-marigold-500);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  ::selection {
+    background: var(--color-marigold-100);
   }
 }
 
-/* Custom subtle scrollbar */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 5px;
+@layer components {
+  .container-page {
+    width: 100%;
+    max-width: 76rem;
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+  @media (min-width: 640px) {
+    .container-page { padding-inline: 1.5rem; }
+  }
+
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 1rem;
+  }
+
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--color-brand-700);
+  }
+
+  /* Rich text from the admin panel (sanitised server-side). */
+  .prose-bn {
+    color: var(--color-ink-soft);
+    font-size: 1rem;
+    line-height: 1.85;
+    overflow-wrap: anywhere;
+  }
+  .prose-bn > * + * { margin-top: 0.9em; }
+  .prose-bn h2, .prose-bn h3, .prose-bn h4, .prose-bn h5 {
+    font-family: var(--font-serif);
+    color: var(--color-ink);
+    font-weight: 700;
+    margin-top: 1.6em;
+  }
+  .prose-bn h2 { font-size: 1.3rem; }
+  .prose-bn h3 { font-size: 1.15rem; }
+  .prose-bn h4, .prose-bn h5 { font-size: 1.02rem; }
+  .prose-bn strong, .prose-bn b { color: var(--color-ink); font-weight: 700; }
+  .prose-bn ul, .prose-bn ol { padding-left: 1.4em; }
+  .prose-bn ul { list-style: disc; }
+  .prose-bn ol { list-style: decimal; }
+  .prose-bn li + li { margin-top: 0.4em; }
+  .prose-bn li > p { margin: 0; }
+  .prose-bn li::marker { color: var(--color-brand-600); }
+  .prose-bn a {
+    color: var(--color-brand-700);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .prose-bn blockquote {
+    border-left: 3px solid var(--color-marigold-500);
+    padding-left: 1em;
+    color: var(--color-muted);
+  }
+  .prose-bn table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+  }
+  .prose-bn th, .prose-bn td {
+    border: 1px solid var(--color-line);
+    padding: 0.45em 0.7em;
+    text-align: left;
+    vertical-align: top;
+  }
+  .prose-bn th { background: var(--color-brand-50); color: var(--color-ink); }
+  .prose-bn hr { border-color: var(--color-line); }
 }
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

@@ -4,14 +4,17 @@ This is the public web portal for **DailyJobs**, built with Next.js 16 (App Rout
 
 ## Features & Architecture
 
-- **Home Page (`/`)**: Latest active jobs with live pagination, category filter tabs, and text search (`q`).
-- **Category Archive (`/category/[slug]`)**: Dedicated category pages (`govt_jobs`, `bank_jobs`, `private_jobs`, `defense_jobs`, `ngo_education`, `other_jobs`).
-- **Job Details (`/job/[slug]`)**: Crawlable SSR with organization details, vacancies, deadline countdown, sanitized HTML description, full-page circular evidence scans, and direct online application links.
-- **Job detail metadata**: Each job has a canonical URL and page specific Open Graph metadata. Structured job markup is deferred until the API provides verified position level fields.
-- **Question Bank (`/question-bank`)**: Read-only study and revision zone with MCQ options, correct answers, explanations, and exam origin badges.
-- **Current Affairs (`/current-affairs`)**: Read-only timeline of recent general knowledge facts.
-- **Deduplicated View Counting**: Server-proxied same-origin route handler (`/api/jobs/[id]/view`) with browser session UUID.
-- **Sitemap & Robots (`/sitemap.xml`, `/robots.txt`)**: Dynamic sitemap with paginated 50-item batches and canonical apex domain (`https://dailyjobs.bd`).
+- **Home (`/`)**: latest active jobs (server-rendered, paginated with `?page=N`), category tiles with live counts, closing-soon list. Old `/?q=`, `/?search=` and `/?category=` links redirect permanently to `/search` and `/category/[slug]`.
+- **Category (`/category/[slug]`)**: only categories the API publishes; unknown slugs and out-of-range pages return 404. Empty categories are `noindex`.
+- **Job detail (`/job/[slug]`)**: ISR (5 min). Key facts, sanitised description, circular scans, apply box that links to the employer only. Numeric `/job/{id}` links redirect to the slug URL. Expired/unpublished jobs are a real 404 (the API does not return them).
+- **Search (`/search?q=`)**: internal search, always `noindex, follow`.
+- **Question bank (`/question-bank`, `/question-bank/subject/[slug]`, `/question-bank/set/[slug]`)**: read-only questions with answers and explanations. Pages with fewer than 10 questions are `noindex` and left out of the sitemap until content grows.
+- **Current affairs (`/current-affairs`)**: same rule (indexed from 10 items).
+- **About / Contact / Privacy / Disclaimer**.
+- **API outages** throw `ApiUnavailableError` → `app/error.tsx` with HTTP 500, never an empty list or a 404.
+- **Structured data**: Organization/WebSite on home, BreadcrumbList on inner pages, JobPosting only for a single named post with exact open deadline, real employer, specific location and a full description (`lib/seo.ts`).
+- **Sitemap & robots**: dynamic sitemap built from every API page (no truncation); robots disallows only `/api/`. Preview deployments (`VERCEL_ENV=preview`) are fully `noindex` and disallowed.
+- **Deduplicated view counting**: `/api/jobs/[id]/view` proxies to the API with a session UUID.
 
 ## Environment Variables
 

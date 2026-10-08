@@ -4,11 +4,15 @@ import sanitizeHtml from 'sanitize-html';
 export function sanitizeRichText(html: string): string {
   return sanitizeHtml(html, {
     allowedTags: [
-      'p', 'br', 'strong', 'em', 'b', 'i', 'u',
-      'ul', 'ol', 'li', 'blockquote', 'h2', 'h3', 'h4',
+      'p', 'br', 'hr', 'strong', 'em', 'b', 'i', 'u', 'sub', 'sup',
+      'ul', 'ol', 'li', 'blockquote', 'h2', 'h3', 'h4', 'h5',
       'table', 'thead', 'tbody', 'tr', 'th', 'td', 'a',
     ],
-    allowedAttributes: { a: ['href'], th: ['colspan', 'rowspan'], td: ['colspan', 'rowspan'] },
+    allowedAttributes: { a: ['href', 'rel', 'target'], th: ['colspan', 'rowspan'], td: ['colspan', 'rowspan'] },
     allowedSchemes: ['http', 'https', 'mailto'],
+    transformTags: {
+      // Outbound links in circular text open in a new tab and pass no ranking signal.
+      a: sanitizeHtml.simpleTransform('a', { rel: 'nofollow noopener noreferrer', target: '_blank' }),
+    },
   });
 }

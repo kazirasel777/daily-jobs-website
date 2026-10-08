@@ -1,97 +1,66 @@
 // File: app/sitemap.ts
+// Only canonical, indexable pages. Jobs come from every page of the public API;
+// if the API fails the sitemap answers with an error (crawlers retry later)
+// instead of publishing a truncated or empty list. Rendered per request so a
+// deploy never depends on the API being reachable at build time.
 import type { MetadataRoute } from 'next';
-import { getJobCategories, getJobs } from '@/lib/api';
+import { getAllJobs, getCurrentAffairs, getJobCategories, getJobs, getStudyCollections, getStudyQuestions, getStudySubjects } from '@/lib/api';
+import { absoluteUrl, jobPath } from '@/lib/site';
+import { MIN_INDEXABLE_QUESTIONS } from '@/lib/study';
 
 export const dynamic = 'force-dynamic';
 
-function parseValidDate(dateValue?: string | null): Date | undefined {
-  if (!dateValue) return undefined;
-  const parsed = new Date(dateValue);
-  return isNaN(parsed.getTime()) ? undefined : parsed;
+function validDate(value?: string | null): Date | undefined {
+  if (!value) return undefined;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? undefined : d;
+}
+
+function latest(dates: (Date | undefined)[]): Date | undefined {
+  return dates.reduce<Date | undefined>((max, d) => (d && (!max || d > max) ? d : max), undefined);
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://dailyjobs.bd';
+  const [jobs, categories, subjects, collections, questionMeta, affairs] = await Promise.all([
+    getAllJobs(),
+    getJobCategories(),
+    getStudySubjects(),
+    getStudyCollections(),
+    getStudyQuestions({ per_page: 1 }),
+    getCurrentAffairs({ per_page: 1 }),
+  ]);
 
-  const staticUrls: MetadataRoute.Sitemap = [
-    {
-      url: baseUrl,
-      changeFrequency: 'daily',
-      priority: 1.0,
-    },
-    {
-      url: `${baseUrl}/question-bank`,
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/current-affairs`,
-      changeFrequency: 'daily',
-      priority: 0.8,
-    },
-  ];
+  const entries: MetadataRoute.Sitemap = [];
 
-  let categoryUrls: MetadataRoute.Sitemap = [];
-  try {
-    const categories = await getJobCategories();
-    categoryUrls = categories.map((cat) => ({
-      url: `${baseUrl}/category/${cat.slug}`,
-      changeFrequency: 'daily',
-      priority: 0.9,
-    }));
-  } catch (err) {
-    console.error('[Sitemap Categories Error]:', err);
+  // Home: last change is the newest published job.
+  entries.push({ url: absoluteUrl('/'), lastModified: latest(jobs.map((j) => validDate(j.published_at))) });
+
+  // Categories with at least one active job (empty ones are noindex).
+  const categoryCounts = await Promise.all(categories.map((c) => getJobs({ category: c.slug, per_page: 1 }).then((r) => r.meta.total)));
+  categories.forEach((c, i) => {
+    if (categoryCounts[i] === 0) return;
+    const newest = latest(jobs.filter((j) => j.category?.slug === c.slug).map((j) => validDate(j.published_at)));
+    entries.push({ url: absoluteUrl(`/category/${c.slug}`), ...(newest ? { lastModified: newest } : {}) });
+  });
+
+  for (const job of jobs) {
+    const modified = validDate(job.updated_at) ?? validDate(job.published_at);
+    entries.push({ url: absoluteUrl(jobPath(job)), ...(modified ? { lastModified: modified } : {}) });
   }
 
-  const jobUrls: MetadataRoute.Sitemap = [];
-  try {
-    let currentPage = 1;
-    let lastPage = 1;
-    const MAX_PAGES_SAFETY_CAP = 100; // Safe upper bound (up to 5,000 published jobs)
-    let latestJobDate: Date | undefined;
-
-    do {
-      const jobsRes = await getJobs({
-        page: currentPage,
-        per_page: 50, // Strict maximum accepted by Laravel public API
-      });
-
-      const items = jobsRes.data || [];
-      lastPage = jobsRes.meta?.last_page || 1;
-
-      for (const job of items) {
-        const rawDate = job.updated_at || job.published_at;
-        const validDate = parseValidDate(rawDate);
-
-        if (validDate && (!latestJobDate || validDate > latestJobDate)) {
-          latestJobDate = validDate;
-        }
-
-        const entry: MetadataRoute.Sitemap[number] = {
-          url: `${baseUrl}/job/${job.slug || job.id}`,
-        };
-
-        if (validDate) {
-          entry.lastModified = validDate;
-        }
-
-        jobUrls.push(entry);
-      }
-
-      currentPage++;
-    } while (currentPage <= lastPage && currentPage <= MAX_PAGES_SAFETY_CAP);
-
-    if (lastPage > MAX_PAGES_SAFETY_CAP) {
-      console.warn(`[Sitemap Warning] Total pages (${lastPage}) exceeded safety cap (${MAX_PAGES_SAFETY_CAP}). Consider partitioning into a sitemap index.`);
-    }
-
-    // If we have a latest job timestamp, use it as homepage lastModified
-    if (latestJobDate && staticUrls[0]) {
-      staticUrls[0].lastModified = latestJobDate;
-    }
-  } catch (err) {
-    console.error('[Sitemap Jobs Error]:', err);
+  // Study pages follow the same thresholds the pages use for their robots tag.
+  if (questionMeta.meta.total >= MIN_INDEXABLE_QUESTIONS) entries.push({ url: absoluteUrl('/question-bank') });
+  subjects
+    .filter((s) => s.question_count >= MIN_INDEXABLE_QUESTIONS)
+    .forEach((s) => entries.push({ url: absoluteUrl(`/question-bank/subject/${s.slug}`) }));
+  collections
+    .filter((c) => c.question_count >= MIN_INDEXABLE_QUESTIONS)
+    .forEach((c) => entries.push({ url: absoluteUrl(`/question-bank/set/${c.slug}`) }));
+  if (affairs.meta.total >= 10) {
+    entries.push({ url: absoluteUrl('/current-affairs'), lastModified: validDate(affairs.data[0]?.affair_date) });
   }
 
-  return [...staticUrls, ...categoryUrls, ...jobUrls];
+  for (const path of ['/about', '/contact', '/privacy', '/disclaimer']) entries.push({ url: absoluteUrl(path) });
+
+  return entries;
 }

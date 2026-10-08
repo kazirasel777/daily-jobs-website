@@ -10,11 +10,12 @@ export async function POST(
     return NextResponse.json({ error: 'Missing job ID' }, { status: 400 });
   }
 
-  const apiBaseUrl = process.env.API_BASE_URL?.replace(/\/+$/, '');
-  if (!apiBaseUrl) {
-    // Graceful fallback if API_BASE_URL is not set
-    return NextResponse.json({ counted: false, note: 'API_BASE_URL not configured' }, { status: 200 });
+  if (!/^\d{1,10}$/.test(id)) {
+    return NextResponse.json({ counted: false }, { status: 400 });
   }
+
+  // Same default host as lib/api.ts when API_BASE_URL is not set.
+  const apiBaseUrl = (process.env.API_BASE_URL || 'https://jobs.kazitechsolutions.com/api/v1').replace(/\/+$/, '');
 
   let installationId: string | undefined;
   try {

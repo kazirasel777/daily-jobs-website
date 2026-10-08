@@ -1,118 +1,79 @@
 // File: app/current-affairs/page.tsx
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import Breadcrumbs from '@/components/Breadcrumbs';
+import EmptyState from '@/components/EmptyState';
 import Pagination from '@/components/Pagination';
 import { getCurrentAffairs } from '@/lib/api';
+import { formatDateBn, parsePage, toBnDigits, toBnNumber } from '@/lib/format';
+import { pagedPath } from '@/lib/site';
+import { pageMetadata } from '@/lib/seo';
 
-interface CurrentAffairsProps {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
+
+const PER_PAGE = 20;
+/** Fewer published items than this: readable, but kept out of the index. */
+const MIN_INDEXABLE_ITEMS = 10;
+
+export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
+  const page = parsePage((await searchParams).page);
+  const { meta } = await getCurrentAffairs({ page, per_page: PER_PAGE });
+  return pageMetadata({
+    title: `সাম্প্রতিক সাধারণ জ্ঞান${page > 1 ? ` — পৃষ্ঠা ${toBnDigits(page)}` : ''}`,
+    description: 'চাকরি পরীক্ষার প্রস্তুতির জন্য জাতীয় ও আন্তর্জাতিক সাম্প্রতিক ঘটনাবলি প্রশ্ন-উত্তর আকারে, তারিখসহ।',
+    path: pagedPath('/current-affairs', page),
+    index: meta.total >= MIN_INDEXABLE_ITEMS,
+  });
 }
 
-export const metadata: Metadata = {
-  title: 'সাম্প্রতিক সাধারণ জ্ঞান ও ঘটনাপ্রবাহ',
-  description:
-    'চাকরি ও ভর্তি পরীক্ষার প্রস্তুতির জন্য বাংলাদেশ ও আন্তর্জাতিক বিষয়াবলীর সর্বশেষ সাম্প্রতিক সাধারণ জ্ঞান তথ্যাবলী।',
-  alternates: {
-    canonical: 'https://dailyjobs.bd/current-affairs',
-  },
-  openGraph: {
-    title: 'সাম্প্রতিক সাধারণ জ্ঞান ও ঘটনাপ্রবাহ | দৈনিক চাকরি',
-    description: 'বাংলাদেশ ও আন্তর্জাতিক সাম্প্রতিক সাধারণ জ্ঞান তথ্যাবলী পড়ুন দৈনিক চাকরি ওয়েবসাইটে।',
-    url: 'https://dailyjobs.bd/current-affairs',
-    type: 'website',
-  },
-};
-
-export default async function CurrentAffairsPage({ searchParams }: CurrentAffairsProps) {
-  const resolvedParams = await searchParams;
-  const rawPage = resolvedParams.page;
-  const currentPage = typeof rawPage === 'string' ? Math.max(1, parseInt(rawPage, 10) || 1) : 1;
-
-  const affairsRes = await getCurrentAffairs({
-    page: currentPage,
-    per_page: 20,
-  });
-
-  const affairs = affairsRes.data;
-  const meta = affairsRes.meta;
+export default async function CurrentAffairsPage({ searchParams }: { searchParams: SearchParams }) {
+  const page = parsePage((await searchParams).page);
+  const { data, meta } = await getCurrentAffairs({ page, per_page: PER_PAGE });
+  if (page > 1 && page > meta.last_page) notFound();
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8 sm:py-10">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-
-        {/* হেডার */}
-        <div className="mb-6 sm:mb-8 text-center sm:text-left">
-          <Link
-            href="/"
-            className="text-orange-600 hover:text-orange-700 text-xs sm:text-sm font-semibold mb-2 inline-flex items-center gap-1.5 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            হোমপেজে ফিরে যান
-          </Link>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">
-            সাম্প্রতিক সাধারণ জ্ঞান
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-600 mt-1">
-            জাতীয় ও আন্তর্জাতিক গুরুত্বপূর্ণ ঘটনাবলী ও সাম্প্রতিক তথ্যাবলী
-          </p>
+    <>
+      <section className="border-b border-line bg-surface">
+        <div className="container-page py-7 sm:py-9">
+          <Breadcrumbs items={[{ name: 'সাধারণ জ্ঞান', path: '/current-affairs' }]} />
+          <h1 className="mt-4 font-serif text-[1.75rem] font-bold text-ink sm:text-4xl">সাম্প্রতিক সাধারণ জ্ঞান</h1>
+          <p className="mt-2 max-w-2xl text-ink-soft">নিয়োগ পরীক্ষায় আসতে পারে এমন সাম্প্রতিক তথ্য, প্রশ্ন-উত্তর আকারে।</p>
         </div>
+      </section>
 
-        {/* তথ্য তালিকা */}
-        {affairs.length > 0 ? (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center text-xs text-slate-500 pb-1">
-              <span>মোট {meta.total} টি সাম্প্রতিক তথ্য</span>
-              <span>পৃষ্ঠা {meta.current_page} / {meta.last_page}</span>
-            </div>
-
-            {affairs.map((item) => (
-              <article
-                key={item.id}
-                className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-100 shadow-2xs transition-all hover:border-orange-200"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
-                  {item.category && (
-                    <span className="bg-orange-50 text-orange-700 text-xs font-bold px-2.5 py-0.5 rounded-md border border-orange-100">
-                      {item.category}
-                    </span>
-                  )}
-                  {item.affair_date && (
-                    <span className="text-xs text-slate-400 font-medium">
-                      তারিখ: {item.affair_date}
-                    </span>
-                  )}
-                </div>
-
-                <h2 className="text-base sm:text-lg font-bold text-slate-900 mb-2 leading-relaxed">
-                  {item.question}
-                </h2>
-
-                <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 text-xs sm:text-sm text-emerald-950 font-semibold leading-relaxed">
-                  <span className="text-emerald-700 font-bold block text-xs mb-0.5">উত্তর:</span>
-                  {item.answer}
-                </div>
-              </article>
-            ))}
-
-            <Pagination currentPage={meta.current_page} lastPage={meta.last_page} />
-          </div>
+      <div className="container-page max-w-3xl pt-8">
+        {data.length > 0 ? (
+          <>
+            <p className="mb-4 text-sm text-muted">মোট {toBnNumber(meta.total)}টি তথ্য</p>
+            <ol className="relative space-y-4 border-l-2 border-brand-100 pl-5">
+              {data.map((item) => (
+                <li key={item.id} className="relative">
+                  <span className="absolute -left-[1.72rem] top-6 h-3 w-3 rounded-full border-2 border-white bg-brand-600" aria-hidden="true" />
+                  <article className="card p-5">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      {item.affair_date && <time dateTime={item.affair_date} className="font-semibold text-brand-700">{formatDateBn(item.affair_date)}</time>}
+                      {item.category && <span className="rounded-md bg-paper px-2 py-0.5 text-muted">{item.category}</span>}
+                    </div>
+                    <h2 className="mt-2 text-lg font-bold leading-8 text-ink">{item.question}</h2>
+                    <p className="mt-2 rounded-lg bg-brand-50 px-3 py-2 font-semibold text-brand-900">
+                      <span className="sr-only">উত্তর: </span>
+                      {item.answer}
+                    </p>
+                  </article>
+                </li>
+              ))}
+            </ol>
+            <Pagination currentPage={page} lastPage={meta.last_page} hrefFor={(p) => pagedPath('/current-affairs', p)} />
+          </>
         ) : (
-          <div className="bg-white p-12 sm:p-16 rounded-2xl text-center border border-slate-100 shadow-2xs">
-            <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-3 font-bold text-xl">
-              i
-            </div>
-            <h3 className="text-base font-bold text-slate-800 mb-1">
-              বর্তমানে কোনো সাম্প্রতিক তথ্য পাওয়া যায়নি
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto">
-              নতুন সাধারণ জ্ঞান তথ্য প্রকাশিত হলে স্বয়ংক্রিয়ভাবে এখানে যুক্ত হবে।
-            </p>
-          </div>
+          <EmptyState
+            icon="spark"
+            title="এখনো কোনো তথ্য প্রকাশিত হয়নি"
+            body="সাম্প্রতিক সাধারণ জ্ঞানের তথ্য প্রকাশিত হলে এখানে তারিখ অনুযায়ী দেখা যাবে।"
+            action={{ href: '/question-bank', label: 'প্রশ্নব্যাংক দেখুন' }}
+          />
         )}
-
       </div>
-    </div>
+    </>
   );
 }

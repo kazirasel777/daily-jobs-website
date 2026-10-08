@@ -25,8 +25,22 @@ if (process.env.API_BASE_URL) {
 }
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   images: {
     remotePatterns: allowedPatterns,
+    formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 86400,
+  },
+  async redirects() {
+    return [
+      // One canonical host: www → apex (also configure this in the Vercel domain settings).
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'www.dailyjobs.bd' }],
+        destination: 'https://dailyjobs.bd/:path*',
+        permanent: true,
+      },
+    ];
   },
 };
 

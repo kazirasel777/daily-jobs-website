@@ -1,124 +1,103 @@
 // File: app/category/[slug]/page.tsx
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import Breadcrumbs from '@/components/Breadcrumbs';
+import EmptyState from '@/components/EmptyState';
 import JobCard from '@/components/JobCard';
 import Pagination from '@/components/Pagination';
 import { getJobCategories, getJobs } from '@/lib/api';
+import { parsePage, toBnDigits, toBnNumber } from '@/lib/format';
+import { pagedPath } from '@/lib/site';
+import { pageMetadata } from '@/lib/seo';
+import type { JobCategory } from '@/types/job';
 
-interface CategoryPageProps {
-  params: Promise<{ slug: string }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}
+type Params = Promise<{ slug: string }>;
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const { slug } = await params;
+const PER_PAGE = 20;
+
+/** Short reader-facing introductions for the categories that exist in the admin panel. */
+const INTROS: Record<string, string> = {
+  govt_jobs: 'মন্ত্রণালয়, অধিদপ্তর, জেলা প্রশাসন, বিশ্ববিদ্যালয় ও রাষ্ট্রায়ত্ত প্রতিষ্ঠানের নিয়োগ বিজ্ঞপ্তি।',
+  bank_jobs: 'সরকারি ও বেসরকারি ব্যাংক এবং আর্থিক প্রতিষ্ঠানের নিয়োগ বিজ্ঞপ্তি।',
+  private_jobs: 'বেসরকারি কোম্পানি ও প্রতিষ্ঠানের নিয়োগ বিজ্ঞপ্তি।',
+  defense_jobs: 'সেনা, নৌ ও বিমানবাহিনীসহ প্রতিরক্ষা ও বাহিনীর ভর্তি ও নিয়োগ বিজ্ঞপ্তি।',
+  ngo_education: 'এনজিও, স্কুল-কলেজ ও শিক্ষাপ্রতিষ্ঠানের নিয়োগ বিজ্ঞপ্তি।',
+  other_jobs: 'অন্য বিভাগে না পড়া প্রতিষ্ঠানের নিয়োগ বিজ্ঞপ্তি।',
+};
+
+async function findCategory(slug: string): Promise<JobCategory | undefined> {
   const categories = await getJobCategories();
-  const category = categories.find((c) => c.slug === slug);
-  const categoryName = category ? category.name : slug.replace(/[-_]/g, ' ');
-
-  return {
-    title: `${categoryName} সার্কুলার ও নিয়োগ বিজ্ঞপ্তি`,
-    description: `বাংলাদেশের সর্বশেষ ${categoryName} সংক্রান্ত সকল চাকরির নিয়োগ বিজ্ঞপ্তি, আবেদনের শেষ তারিখ ও বিস্তারিত তথ্য।`,
-    alternates: {
-      canonical: `https://dailyjobs.bd/category/${slug}`,
-    },
-    openGraph: {
-      title: `${categoryName} সার্কুলার ও নিয়োগ বিজ্ঞপ্তি | দৈনিক চাকরি`,
-      description: `বাংলাদেশের সর্বশেষ ${categoryName} সংক্রান্ত সকল চাকরির খবর।`,
-      url: `https://dailyjobs.bd/category/${slug}`,
-      type: 'website',
-    },
-  };
+  return categories.find((c) => c.slug === slug);
 }
 
-export default async function CategoryJobs({ params, searchParams }: CategoryPageProps) {
+export async function generateMetadata({ params, searchParams }: { params: Params; searchParams: SearchParams }): Promise<Metadata> {
   const { slug } = await params;
-  const resolvedSearchParams = await searchParams;
+  const page = parsePage((await searchParams).page);
+  const category = await findCategory(slug);
+  if (!category) return { title: 'বিভাগ পাওয়া যায়নি' };
 
-  const rawPage = resolvedSearchParams.page;
-  const currentPage = typeof rawPage === 'string' ? Math.max(1, parseInt(rawPage, 10) || 1) : 1;
+  const pageSuffix = page > 1 ? ` — পৃষ্ঠা ${toBnDigits(page)}` : '';
+  const intro = INTROS[category.slug] ?? `${category.name} বিভাগের নিয়োগ বিজ্ঞপ্তি।`;
+  // An empty category is still useful to visitors but has nothing worth indexing.
+  const { meta } = await getJobs({ category: category.slug, page, per_page: PER_PAGE });
+  return pageMetadata({
+    index: meta.total > 0,
+    title: `${category.name}: নিয়োগ বিজ্ঞপ্তি${pageSuffix}`,
+    description: `${intro} প্রতিটি বিজ্ঞপ্তিতে আবেদনের শেষ তারিখ, পদসংখ্যা, কর্মস্থল ও আবেদনের নিয়ম দেখুন।`,
+    path: pagedPath(`/category/${category.slug}`, page),
+  });
+}
 
-  const [categories, jobsResponse] = await Promise.all([
-    getJobCategories(),
-    getJobs({
-      category: slug,
-      page: currentPage,
-      per_page: 20,
-    }),
-  ]);
+export default async function CategoryPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
+  const { slug } = await params;
+  const page = parsePage((await searchParams).page);
 
-  const category = categories.find((c) => c.slug === slug);
-  const categoryName = category ? category.name : slug.replace(/[-_]/g, ' ');
+  const category = await findCategory(slug);
+  if (!category) notFound();
 
-  const jobs = jobsResponse.data;
-  const meta = jobsResponse.meta;
+  const jobsRes = await getJobs({ category: category.slug, page, per_page: PER_PAGE });
+  if (page > 1 && page > jobsRes.meta.last_page) notFound();
+
+  const basePath = `/category/${category.slug}`;
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8 sm:py-10">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        
-        {/* ক্যাটাগরি হেডার কার্ড */}
-        <div className="mb-6 sm:mb-8 bg-white p-5 sm:p-7 rounded-2xl border border-slate-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <Link
-              href="/"
-              className="text-orange-600 hover:text-orange-700 text-xs sm:text-sm font-semibold mb-2 inline-flex items-center gap-1.5 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              হোমপেজে ফিরে যান
-            </Link>
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 mt-1">
-              {categoryName}
-            </h1>
-            <p className="text-slate-500 mt-1 text-xs sm:text-sm">
-              এই ক্যাটাগরির সর্বশেষ সকল সরকারি ও বেসরকারি নিয়োগ বিজ্ঞপ্তি
+    <>
+      <section className="border-b border-line bg-surface">
+        <div className="container-page py-7 sm:py-9">
+          <Breadcrumbs items={[{ name: category.name, path: basePath }]} />
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h1 className="font-serif text-[1.75rem] font-bold text-ink sm:text-4xl">
+                {category.name}
+                {page > 1 && <span className="ml-2 text-lg font-semibold text-muted">— পৃষ্ঠা {toBnDigits(page)}</span>}
+              </h1>
+              <p className="mt-2 max-w-2xl text-ink-soft">{INTROS[category.slug] ?? `${category.name} বিভাগের নিয়োগ বিজ্ঞপ্তি।`}</p>
+            </div>
+            <p className="rounded-xl bg-brand-50 px-4 py-2 text-sm text-brand-800">
+              সক্রিয় বিজ্ঞপ্তি <strong className="font-serif text-xl">{toBnNumber(jobsRes.meta.total)}</strong>টি
             </p>
-          </div>
-          
-          <div className="bg-orange-50 px-4 py-2.5 rounded-xl border border-orange-100 text-center shrink-0">
-            <span className="block text-xl sm:text-2xl font-black text-orange-600">
-              {meta.total}
-            </span>
-            <span className="text-[11px] font-bold text-orange-800 uppercase tracking-wider">
-              মোট বিজ্ঞপ্তি
-            </span>
           </div>
         </div>
+      </section>
 
-        {/* জব তালিকা */}
-        {jobs.length > 0 ? (
-          <div className="space-y-4">
-            {jobs.map((job) => (
+      <div className="container-page max-w-4xl pt-8">
+        {jobsRes.data.length > 0 ? (
+          <div className="space-y-3">
+            {jobsRes.data.map((job) => (
               <JobCard key={job.id} job={job} />
             ))}
-
-            <Pagination currentPage={meta.current_page} lastPage={meta.last_page} />
           </div>
         ) : (
-          <div className="bg-white p-12 sm:p-16 rounded-2xl text-center border border-slate-100 shadow-xs flex flex-col items-center justify-center">
-            <div className="w-14 h-14 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mb-4">
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-              </svg>
-            </div>
-            <h3 className="text-base font-bold text-slate-700 mb-1">
-              বর্তমানে এই ক্যাটাগরিতে কোনো সক্রিয় বিজ্ঞপ্তি নেই
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-500 max-w-sm">
-              নতুন বিজ্ঞপ্তি প্রকাশিত হওয়া মাত্রই এখানে স্বয়ংক্রিয়ভাবে যোগ হয়ে যাবে।
-            </p>
-            <Link
-              href="/"
-              className="mt-5 inline-flex items-center gap-1.5 text-xs font-bold text-orange-600 hover:text-orange-700 underline"
-            >
-              অন্যান্য ক্যাটাগরির চাকরি দেখুন
-            </Link>
-          </div>
+          <EmptyState
+            icon="file"
+            title="এই বিভাগে এখন কোনো সক্রিয় বিজ্ঞপ্তি নেই"
+            body="নতুন বিজ্ঞপ্তি প্রকাশিত হলে এখানে দেখা যাবে। ততক্ষণ অন্য বিভাগের সর্বশেষ বিজ্ঞপ্তি দেখতে পারেন।"
+            action={{ href: '/', label: 'সর্বশেষ সব বিজ্ঞপ্তি' }}
+          />
         )}
-
+        <Pagination currentPage={page} lastPage={jobsRes.meta.last_page} hrefFor={(p) => pagedPath(basePath, p)} />
       </div>
-    </div>
+    </>
   );
 }

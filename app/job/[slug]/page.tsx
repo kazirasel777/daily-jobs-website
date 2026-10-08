@@ -1,387 +1,267 @@
 // File: app/job/[slug]/page.tsx
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Image from 'next/image';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
+import Breadcrumbs from '@/components/Breadcrumbs';
+import DeadlineBadge from '@/components/DeadlineBadge';
+import Icon from '@/components/Icon';
 import ViewCounter from '@/components/ViewCounter';
-import { getJobDetail } from '@/lib/api';
+import { getJobDetail, getJobs } from '@/lib/api';
+import {
+  applicationMethodLabel,
+  daysUntil,
+  formatDateBn,
+  isHttpUrl,
+  stripHtml,
+  toBnDigits,
+  toBnNumber,
+  truncate,
+} from '@/lib/format';
 import { sanitizeRichText } from '@/lib/sanitize';
+import { jobPath } from '@/lib/site';
+import { jobPostingSchema, jsonLd, pageMetadata } from '@/lib/seo';
 import type { JobDetail } from '@/types/job';
 
-interface JobDetailsProps {
-  params: Promise<{ slug: string }>;
+type Params = Promise<{ slug: string }>;
+
+// Rendered on first visit, then served from cache and refreshed every 5 minutes.
+export const revalidate = 300;
+export function generateStaticParams() {
+  return [];
 }
 
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+function metaDescription(job: JobDetail): string {
+  if (job.seo?.description?.trim()) return job.seo.description.trim();
+  const fromBody = stripHtml(job.description);
+  if (fromBody.length >= 60) return truncate(fromBody);
+  const parts = [
+    job.organization_name && `${job.organization_name}-এর নিয়োগ বিজ্ঞপ্তি।`,
+    job.vacancies && `পদসংখ্যা ${toBnNumber(job.vacancies)}।`,
+    job.location && `কর্মস্থল ${job.location}।`,
+    job.deadline && `আবেদনের শেষ তারিখ ${formatDateBn(job.deadline)}।`,
+  ].filter(Boolean);
+  return parts.length ? parts.join(' ') : 'নিয়োগ বিজ্ঞপ্তির বিস্তারিত, আবেদনের নিয়ম ও মূল বিজ্ঞপ্তির ছবি।';
 }
 
-function toBengaliDigits(num: number | string | null | undefined): string {
-  if (num === null || num === undefined) return '';
-  const digits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
-  return num.toString().replace(/\d/g, (x) => digits[Number(x)]);
-}
-
-function isValidHttpUrl(stringUrl: string | null | undefined): boolean {
-  if (!stringUrl) return false;
-  try {
-    const url = new URL(stringUrl);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-export async function generateMetadata({ params }: JobDetailsProps): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug } = await params;
   const job = await getJobDetail(slug);
+  if (!job) return { title: 'বিজ্ঞপ্তিটি পাওয়া যায়নি', robots: { index: false, follow: true } };
 
-  if (!job) {
-    return {
-      title: 'চাকরি পাওয়া যায়নি | দৈনিক চাকরি',
-      description: 'অনুরোধকৃত চাকরির বিজ্ঞপ্তিটি পাওয়া যায়নি বা মেয়াদোত্তীর্ণ হয়েছে।',
-    };
-  }
-
-  const seoTitle = job.seo?.title || `${job.title} | দৈনিক চাকরি`;
-  const seoDescription =
-    job.seo?.description ||
-    stripHtml(job.description || '').substring(0, 160) ||
-    'চাকরির বিস্তারিত বিজ্ঞপ্তি ও আবেদন পদ্ধতি পড়ুন দৈনিক চাকরি ওয়েবসাইটে।';
-
-  const canonicalUrl = `https://dailyjobs.bd/job/${job.slug}`;
-
-  return {
-    title: seoTitle,
-    description: seoDescription,
-    alternates: {
-      canonical: canonicalUrl,
-    },
-    openGraph: {
-      title: seoTitle,
-      description: seoDescription,
-      url: canonicalUrl,
-      type: 'article',
-      publishedTime: job.published_at || undefined,
-      modifiedTime: job.updated_at || undefined,
-      ...(job.thumbnail_url ? { images: [{ url: job.thumbnail_url }] } : {}),
-    },
-  };
+  const images = [job.thumbnail_url, job.circular_images?.[0]?.url].filter((u): u is string => Boolean(u));
+  return pageMetadata({
+    title: job.seo?.title?.trim() || job.title,
+    description: metaDescription(job),
+    path: jobPath(job),
+    type: 'article',
+    images: images.slice(0, 1),
+    publishedTime: job.published_at ?? undefined,
+    modifiedTime: job.updated_at ?? undefined,
+  });
 }
 
-function getValidJobPostingSchema(job: JobDetail): Record<string, unknown> | null {
-  // 1. Hiring Organization must exist and be a genuine employer (never DailyJobs or portal placeholder)
-  const orgName = job.organization_name?.trim();
-  if (!orgName || /dailyjobs|দৈনিক\s*চাকরি/i.test(orgName)) {
-    return null;
-  }
-
-  // 2. Real specific job location must exist (never default to ঢাকা or Bangladesh)
-  const location = job.location?.trim();
-  if (!location) {
-    return null;
-  }
-
-  // 3. Must be currently active (not expired)
-  if (job.days_left !== null && job.days_left < 0) {
-    return null;
-  }
-  if (!job.deadline) {
-    return null;
-  }
-  const validThroughDate = new Date(`${job.deadline}T23:59:59+06:00`);
-  if (isNaN(validThroughDate.getTime()) || validThroughDate.getTime() < Date.now()) {
-    return null;
-  }
-
-  // 4. Must NOT be a multi-role or broad collective circular
-  // Google guidelines: "Do not create a single JobPosting for multiple jobs or a career fair."
-  const title = job.title.trim();
-  const multiPostPatterns = /বিভিন্ন\s*পদ|একাধিক\s*পদ|বহু\s*পদ/i;
-  if (multiPostPatterns.test(title)) {
-    return null;
-  }
-
-  // 5. Must have a real, substantive text description (Google requires full description, not empty/tiny placeholder)
-  const cleanDesc = stripHtml(job.description || '').trim();
-  if (cleanDesc.length < 60) {
-    return null;
-  }
-
-  // 6. Must have a valid publication date
-  const rawDate = job.published_at || job.circular_published_date;
-  if (!rawDate) {
-    return null;
-  }
-  const postedDate = new Date(rawDate);
-  if (isNaN(postedDate.getTime())) {
-    return null;
-  }
-
-  // Build strictly compliant, truthful schema without speculative fields (no assumed directApply or assumed FULL_TIME)
-  const schema: Record<string, unknown> = {
-    '@context': 'https://schema.org',
-    '@type': 'JobPosting',
-    title: title,
-    description: cleanDesc,
-    datePosted: postedDate.toISOString(),
-    validThrough: validThroughDate.toISOString(),
-    hiringOrganization: {
-      '@type': 'Organization',
-      name: orgName,
-    },
-    jobLocation: {
-      '@type': 'Place',
-      address: {
-        '@type': 'PostalAddress',
-        addressLocality: location,
-        addressCountry: 'BD',
-      },
-    },
-  };
-
-  if (job.thumbnail_url) {
-    schema.image = job.thumbnail_url;
-  }
-
-  return schema;
-}
-
-export default async function JobDetailsPage({ params }: JobDetailsProps) {
-  const { slug } = await params;
-  const job = await getJobDetail(slug);
-
-  if (!job) {
-    notFound();
-  }
-
-  const validApplyLink = isValidHttpUrl(job.apply_link) ? job.apply_link : null;
-  const images = (job.circular_images || []).filter((img) => Boolean(img.url));
-  const jobPostingSchema = getValidJobPostingSchema(job);
-
+function Fact({ label, value, icon }: { label: string; value: React.ReactNode; icon: Parameters<typeof Icon>[0]['name'] }) {
   return (
-    <div className="min-h-screen bg-slate-50/80 py-6 sm:py-10">
-      {/* Schema.org JobPosting Structured Data: Only rendered for single, open, fully-detailed jobs */}
-      {jobPostingSchema && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(jobPostingSchema).replace(/</g, '\\u003c'),
-          }}
-        />
-      )}
-
-      {/* ভিউ কাউন্ট প্রক্সি কম্পোনেন্ট (ডিডুপ্লিকেটেড সেশন ট্র্যাকার) */}
-      <ViewCounter jobId={job.id} />
-
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-
-        {/* ব্যাক বাটন */}
-        <div className="mb-5 sm:mb-6">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-slate-600 hover:text-orange-600 transition-colors text-xs sm:text-sm font-semibold bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-2xs"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            সকল বিজ্ঞপ্তিতে ফিরে যান
-          </Link>
-        </div>
-
-        <div className="flex flex-col lg:flex-row gap-6 lg:items-start">
-
-          {/* মূল কন্টেন্ট (বাম পাশ) */}
-          <div className="grow lg:w-2/3 bg-white rounded-2xl sm:rounded-3xl shadow-xs border border-slate-100 overflow-hidden">
-
-            {/* থাম্বনেইল ব্যানার (যদি থাকে) */}
-            {job.thumbnail_url && (
-              <div className="w-full bg-slate-50 border-b border-slate-100 p-4 sm:p-6 flex justify-center">
-                <div className="relative w-full max-w-sm h-48 sm:h-60">
-                  <Image
-                    src={job.thumbnail_url}
-                    alt={job.title}
-                    fill
-                    sizes="(max-width: 640px) 100vw, 400px"
-                    priority
-                    className="object-contain rounded-xl"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="p-5 sm:p-8 md:p-10">
-
-              {/* ক্যাটাগরি ব্যাজ */}
-              {job.category && (
-                <div className="mb-3">
-                  <Link
-                    href={`/category/${job.category.slug}`}
-                    className="bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-100 text-xs font-bold px-3 py-1 rounded-md transition-colors"
-                  >
-                    {job.category.name}
-                  </Link>
-                </div>
-              )}
-
-              {/* জব টাইটেল */}
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 mb-3 leading-snug">
-                {job.title}
-              </h1>
-
-              {/* প্রতিষ্ঠান */}
-              {job.organization_name && (
-                <p className="text-base sm:text-lg font-semibold text-slate-700 mb-6">
-                  {job.organization_name}
-                </p>
-              )}
-
-              {/* মূল তথ্য হাইলাইট গ্রিড */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs sm:text-sm text-slate-700 mb-8">
-                {job.circular_published_date && (
-                  <div>
-                    <span className="text-slate-400 block text-[11px] mb-0.5">প্রকাশের তারিখ</span>
-                    <span className="font-bold">{job.circular_published_date}</span>
-                  </div>
-                )}
-                {job.deadline && (
-                  <div>
-                    <span className="text-slate-400 block text-[11px] mb-0.5">আবেদনের শেষ তারিখ</span>
-                    <span className="font-bold text-red-600">{job.deadline}</span>
-                  </div>
-                )}
-                {job.vacancies !== null && job.vacancies > 0 && (
-                  <div>
-                    <span className="text-slate-400 block text-[11px] mb-0.5">মোট পদসংখ্যা</span>
-                    <span className="font-bold">{toBengaliDigits(job.vacancies)} জন</span>
-                  </div>
-                )}
-                {job.location && (
-                  <div>
-                    <span className="text-slate-400 block text-[11px] mb-0.5">কর্মস্থল</span>
-                    <span className="font-bold">{job.location}</span>
-                  </div>
-                )}
-                {job.application_method && (
-                  <div>
-                    <span className="text-slate-400 block text-[11px] mb-0.5">আবেদনের মাধ্যম</span>
-                    <span className="font-bold capitalize">{job.application_method}</span>
-                  </div>
-                )}
-                {job.days_left !== null && (
-                  <div>
-                    <span className="text-slate-400 block text-[11px] mb-0.5">বাকি সময়</span>
-                    <span className={`font-bold ${job.days_left <= 3 ? 'text-red-600' : 'text-slate-800'}`}>
-                      {job.days_left < 0
-                        ? 'সময় শেষ'
-                        : job.days_left === 0
-                        ? 'আজই শেষ দিন'
-                        : `${toBengaliDigits(job.days_left)} দিন বাকি`}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* বিস্তারিত বিবরণ (স্যানিটাইজড এইচটিএমএল) */}
-              <div className="mb-10">
-                <h2 className="text-lg sm:text-xl font-bold text-slate-900 mb-4 border-l-4 border-orange-500 pl-3">
-                  বিজ্ঞপ্তির বিস্তারিত বিবরণ
-                </h2>
-                {job.description ? (
-                  <div
-                    className="prose prose-slate max-w-none text-slate-700 text-sm sm:text-base leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(job.description) }}
-                  />
-                ) : (
-                  <p className="text-slate-500 text-sm italic bg-slate-50 p-4 rounded-xl">
-                    বিজ্ঞপ্তির লিখিত বিবরণ দেওয়া নেই। অনুগ্রহ করে নিচে সংযুক্ত অফিশিয়াল সার্কুলার চিত্র দেখুন।
-                  </p>
-                )}
-              </div>
-
-              {/* সার্কুলার ইমেজ গ্যালারি */}
-              {images.length > 0 && (
-                <div className="mt-8 pt-8 border-t border-slate-100">
-                  <h2 className="text-lg sm:text-xl font-bold text-slate-900 mb-4 border-l-4 border-orange-500 pl-3">
-                    অফিশিয়াল সার্কুলার বিজ্ঞপ্তি ({toBengaliDigits(images.length)} টি পাতা)
-                  </h2>
-                  <div className="space-y-6">
-                    {images.map((img, idx) => (
-                      <div key={img.page_number || idx} className="rounded-xl overflow-hidden border border-slate-200 shadow-xs">
-                        <div className="bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600 border-b border-slate-200">
-                          পাতা নং: {toBengaliDigits(img.page_number || idx + 1)}
-                        </div>
-                        {/* Using standard img with lazy loading to preserve document aspect ratio & full scan readability */}
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={img.url!}
-                          alt={`${job.title} - সার্কুলার পাতা ${img.page_number || idx + 1}`}
-                          className="w-full h-auto object-contain block bg-white"
-                          loading="lazy"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-            </div>
-          </div>
-
-          {/* ডান পাশের আবেদন বক্স (সাইডবার) */}
-          <div className="lg:w-1/3 shrink-0 w-full">
-            <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xs border border-slate-100 p-5 sm:p-6 sticky top-24 space-y-5">
-              <h3 className="text-base sm:text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">
-                আবেদন প্রক্রিয়া
-              </h3>
-
-              {validApplyLink ? (
-                <>
-                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                    নিচের বাটনে ক্লিক করে অফিশিয়াল নিয়োগকারী ওয়েবসাইটে গিয়ে সরাসরি আবেদন সম্পন্ন করুন।
-                  </p>
-                  <a
-                    href={validApplyLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-sm text-sm sm:text-base text-center"
-                  >
-                    <span>অনলাইনে আবেদন করুন</span>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </a>
-                </>
-              ) : (
-                <div className="bg-orange-50/70 border border-orange-100 rounded-xl p-4 text-center">
-                  <p className="text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                    সরাসরি অনলাইন লিংক নেই
-                  </p>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    এই পদটিতে আবেদনের নিয়মাবলী জানতে বিজ্ঞপ্তির বিবরণ বা অফিশিয়াল সার্কুলার চিত্র দেখুন।
-                  </p>
-                </div>
-              )}
-
-              {/* আবেদনের বিশেষ নির্দেশনা */}
-              {job.application_instructions && (
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-xs text-slate-600 space-y-1">
-                  <strong className="text-slate-800 block">আবেদনের নিয়ম:</strong>
-                  <p className="leading-relaxed">{job.application_instructions}</p>
-                </div>
-              )}
-
-              {/* সতর্কবার্তা */}
-              <div className="text-[11px] text-slate-400 border-t border-slate-100 pt-4 leading-normal">
-                ⚠️ আবেদন করার পূর্বে সার্কুলারে উল্লেখিত শিক্ষাগত যোগ্যতা ও শর্তাবলী মনোযোগ সহকারে পড়ে নিন।
-              </div>
-
-            </div>
-          </div>
-
-        </div>
-
+    <div className="flex gap-2.5 p-3.5 sm:gap-3 sm:p-4">
+      <Icon name={icon} className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" />
+      <div className="min-w-0">
+        <dt className="text-xs font-semibold text-muted">{label}</dt>
+        <dd className="mt-0.5 font-semibold text-ink">{value}</dd>
       </div>
     </div>
+  );
+}
+
+export default async function JobDetailPage({ params }: { params: Params }) {
+  const { slug } = await params;
+  const job = await getJobDetail(slug);
+  if (!job) notFound();
+
+  // Old links by numeric id point to the canonical slug URL.
+  if (job.slug && decodeURIComponent(slug) !== job.slug) permanentRedirect(jobPath(job));
+
+  const days = daysUntil(job.deadline);
+  const expired = days !== null && days < 0;
+  const applyLink = !expired && isHttpUrl(job.apply_link) ? job.apply_link : null;
+  const method = applicationMethodLabel(job.application_method);
+  const images = (job.circular_images ?? []).filter((img): img is { page_number: number; url: string } => Boolean(img.url));
+  const schema = expired ? null : jobPostingSchema(job);
+
+  const related = job.category
+    ? (await getJobs({ category: job.category.slug, per_page: 6 }).catch(() => null))?.data.filter((j) => j.id !== job.id).slice(0, 4) ?? []
+    : [];
+
+  const crumbs = [
+    ...(job.category ? [{ name: job.category.name, path: `/category/${job.category.slug}` }] : []),
+    { name: job.title, path: jobPath(job) },
+  ];
+
+  return (
+    <article>
+      {schema && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(schema) }} />}
+      <ViewCounter jobId={job.id} />
+
+      <header className="border-b border-line bg-surface">
+        <div className="container-page py-7 sm:py-9">
+          <Breadcrumbs items={crumbs} />
+
+          <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
+            {job.category && (
+              <Link href={`/category/${job.category.slug}`} className="rounded-md bg-brand-50 px-2 py-0.5 font-bold text-brand-700 hover:bg-brand-100">
+                {job.category.name}
+              </Link>
+            )}
+            {job.recently_added && <span className="rounded-md bg-marigold-100 px-2 py-0.5 font-bold text-marigold-900">নতুন</span>}
+            <DeadlineBadge deadline={job.deadline} precision={job.deadline_precision} />
+          </div>
+
+          <h1 className="mt-3 max-w-4xl font-serif text-[1.6rem] font-bold leading-snug text-ink sm:text-[2.2rem]">{job.title}</h1>
+          {job.organization_name && (
+            <p className="mt-2 flex items-center gap-2 text-lg text-ink-soft">
+              <Icon name="building" className="h-5 w-5 text-muted" />
+              {job.organization_name}
+            </p>
+          )}
+        </div>
+      </header>
+
+      {expired && (
+        <div className="container-page pt-6">
+          <p role="status" className="flex items-start gap-2 rounded-xl border border-line-strong bg-stone-100 p-4 text-sm text-ink-soft">
+            <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
+            এই বিজ্ঞপ্তির আবেদনের সময় {formatDateBn(job.deadline)} তারিখে শেষ হয়েছে। তথ্যটি শুধু রেফারেন্সের জন্য রাখা হয়েছে।
+          </p>
+        </div>
+      )}
+
+      <div className="container-page pt-8">
+        <section aria-labelledby="facts-heading" className="card overflow-hidden">
+          <h2 id="facts-heading" className="sr-only">এক নজরে</h2>
+          <dl className="-mb-px -mr-px grid grid-cols-2 lg:grid-cols-3 [&>div]:border-b [&>div]:border-r [&>div]:border-line">
+            {job.vacancies !== null && job.vacancies > 0 && <Fact icon="users" label="পদসংখ্যা" value={`${toBnNumber(job.vacancies)} জন`} />}
+            {job.location && <Fact icon="pin" label="কর্মস্থল" value={job.location} />}
+            {job.circular_published_date && <Fact icon="file" label="বিজ্ঞপ্তি প্রকাশ" value={formatDateBn(job.circular_published_date)} />}
+            {job.apply_start_date && <Fact icon="calendar" label="আবেদন শুরু" value={formatDateBn(job.apply_start_date)} />}
+            {job.deadline && (
+              <Fact
+                icon="clock"
+                label={job.deadline_precision === 'approximate' ? 'আবেদনের শেষ তারিখ (আনুমানিক)' : 'আবেদনের শেষ তারিখ'}
+                value={<span className={expired ? 'text-muted line-through' : 'text-alert-700'}>{formatDateBn(job.deadline)}</span>}
+              />
+            )}
+            {method && <Fact icon="external" label="আবেদনের মাধ্যম" value={method} />}
+          </dl>
+        </section>
+      </div>
+
+      <div className="container-page grid gap-8 pt-8 lg:grid-cols-[minmax(0,1fr)_21rem]">
+        <div className="min-w-0 space-y-8">
+
+          <section aria-labelledby="details-heading">
+            <h2 id="details-heading" className="font-serif text-xl font-bold text-ink">বিজ্ঞপ্তির বিস্তারিত</h2>
+            {job.description ? (
+              <div className="prose-bn mt-4" dangerouslySetInnerHTML={{ __html: sanitizeRichText(job.description) }} />
+            ) : (
+              <p className="mt-4 rounded-xl bg-surface p-4 text-sm text-muted">
+                লিখিত বিবরণ যোগ করা হয়নি। যোগ্যতা ও শর্তাবলি জানতে নিচের মূল বিজ্ঞপ্তির ছবি দেখুন।
+              </p>
+            )}
+          </section>
+
+          {images.length > 0 && (
+            <section aria-labelledby="circular-heading">
+              <h2 id="circular-heading" className="font-serif text-xl font-bold text-ink">
+                মূল বিজ্ঞপ্তি <span className="text-base font-semibold text-muted">({toBnDigits(images.length)} পাতা)</span>
+              </h2>
+              <p className="mt-1 text-sm text-muted">ছবিতে ক্লিক করলে পূর্ণ আকারে খুলবে।</p>
+              <div className="mt-4 space-y-5">
+                {images.map((img, idx) => {
+                  const n = img.page_number || idx + 1;
+                  return (
+                    <figure key={`${n}-${idx}`} className="card overflow-hidden">
+                      <a href={img.url} target="_blank" rel="noopener" className="block bg-white">
+                        {/* Scanned circulars have unknown dimensions; a plain lazy image keeps them readable at full width. */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={img.url}
+                          alt={`${job.title} — মূল বিজ্ঞপ্তি, পাতা ${toBnDigits(n)}`}
+                          loading="lazy"
+                          decoding="async"
+                          className="block h-auto w-full"
+                        />
+                      </a>
+                      <figcaption className="border-t border-line px-4 py-2 text-xs text-muted">পাতা {toBnDigits(n)}</figcaption>
+                    </figure>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+        </div>
+
+        <aside className="order-first space-y-5 lg:order-none">
+          <section aria-labelledby="apply-heading" className="card p-5 lg:sticky lg:top-32">
+            <h2 id="apply-heading" className="font-serif text-lg font-bold text-ink">আবেদন</h2>
+            {expired ? (
+              <p className="mt-3 text-sm text-muted">আবেদনের সময় শেষ হয়ে গেছে।</p>
+            ) : (
+              <>
+                {applyLink ? (
+                  <>
+                    <a
+                      href={applyLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-800 px-4 py-3.5 text-base font-bold text-white transition-colors hover:bg-brand-700"
+                    >
+                      নিয়োগকারীর সাইটে আবেদন
+                      <Icon name="external" className="h-4 w-4" />
+                    </a>
+                    <p className="mt-2 break-all text-center text-xs text-muted">{new URL(applyLink).hostname}</p>
+                  </>
+                ) : (
+                  <p className="mt-3 text-sm text-ink-soft">
+                    অনলাইন আবেদনের লিংক দেওয়া নেই। নিচের নিয়ম ও মূল বিজ্ঞপ্তি অনুযায়ী আবেদন করুন।
+                  </p>
+                )}
+                {job.application_instructions && (
+                  <div className="mt-4 rounded-xl bg-paper p-4 text-sm leading-7 text-ink-soft">
+                    <h3 className="mb-1 font-bold text-ink">আবেদনের নিয়ম</h3>
+                    <p className="whitespace-pre-line [overflow-wrap:anywhere]">{job.application_instructions}</p>
+                  </div>
+                )}
+              </>
+            )}
+            <p className="mt-4 flex gap-2 border-t border-line pt-4 text-xs leading-5 text-muted">
+              <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0 text-marigold-700" />
+              দৈনিক চাকরি আবেদন গ্রহণ করে না। আবেদনের আগে মূল বিজ্ঞপ্তির যোগ্যতা, ফি ও শর্ত মিলিয়ে নিন।
+            </p>
+            {(job.published_at || job.updated_at) && (
+              <p className="mt-3 text-xs text-muted">
+                {job.published_at && <>সাইটে প্রকাশ: {formatDateBn(job.published_at)}</>}
+                {job.updated_at && job.updated_at !== job.published_at && <><br />সর্বশেষ হালনাগাদ: {formatDateBn(job.updated_at)}</>}
+              </p>
+            )}
+          </section>
+        </aside>
+      </div>
+
+      {related.length > 0 && job.category && (
+        <section aria-labelledby="related-heading" className="container-page pt-12">
+          <div className="flex items-end justify-between gap-4">
+            <h2 id="related-heading" className="font-serif text-xl font-bold text-ink">{job.category.name}: আরও বিজ্ঞপ্তি</h2>
+            <Link href={`/category/${job.category.slug}`} className="text-sm font-bold text-brand-700 hover:underline">সব দেখুন →</Link>
+          </div>
+          <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+            {related.map((r) => (
+              <li key={r.id} className="card p-4">
+                <Link href={jobPath(r)} className="font-semibold leading-6 text-ink hover:text-brand-700">{r.title}</Link>
+                <div className="mt-2"><DeadlineBadge deadline={r.deadline} /></div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </article>
   );
 }
