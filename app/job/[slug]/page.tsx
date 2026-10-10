@@ -101,8 +101,10 @@ export default async function JobDetailPage({ params }: { params: Params }) {
       {schema && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(schema) }} />}
       <ViewCounter jobId={job.id} />
 
-      <header className="border-b border-line bg-surface">
-        <div className="container-page py-7 sm:py-9">
+      <div className="container-page grid items-start gap-6 py-6 lg:grid-cols-[minmax(0,1fr)_18.5rem]">
+      <article className="card min-w-0 p-5 sm:p-7">
+      <header>
+        <div className="">
           <Breadcrumbs items={crumbs} />
 
           <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
@@ -115,7 +117,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
             <DeadlineBadge deadline={job.deadline} precision={job.deadline_precision} />
           </div>
 
-          <h1 className="mt-3 max-w-4xl font-serif text-[1.6rem] font-bold leading-snug text-ink sm:text-[2.2rem]">{job.title}</h1>
+          <h1 className="mt-3 max-w-4xl font-serif text-[1.6rem] font-bold leading-snug text-ink sm:text-[1.9rem]">{job.title}</h1>
           {job.organization_name && (
             <p className="mt-2 flex items-center gap-2 text-lg text-ink-soft">
               <Icon name="building" className="h-5 w-5 text-muted" />
@@ -126,7 +128,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
       </header>
 
       {expired && (
-        <div className="container-page pt-6">
+        <div className="pt-6">
           <p role="status" className="flex items-start gap-2 rounded-xl border border-line-strong bg-stone-100 p-4 text-sm text-ink-soft">
             <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
             এই বিজ্ঞপ্তির আবেদনের সময় {formatDateBn(job.deadline)} তারিখে শেষ হয়েছে। তথ্যটি শুধু রেফারেন্সের জন্য রাখা হয়েছে।
@@ -134,7 +136,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
         </div>
       )}
 
-      <div className="container-page pt-8">
+      <div className="pt-6">
         <section aria-labelledby="facts-heading" className="card overflow-hidden">
           <h2 id="facts-heading" className="sr-only">এক নজরে</h2>
           <dl className="-mb-px -mr-px grid grid-cols-2 lg:grid-cols-3 [&>div]:border-b [&>div]:border-r [&>div]:border-line">
@@ -146,7 +148,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
               <Fact
                 icon="clock"
                 label={job.deadline_precision === 'approximate' ? 'আবেদনের শেষ তারিখ (আনুমানিক)' : 'আবেদনের শেষ তারিখ'}
-                value={<span className={expired ? 'text-muted line-through' : 'text-alert-700'}>{formatDateBn(job.deadline)}</span>}
+                value={<span className={expired ? 'text-muted line-through' : days !== null && days <= 3 ? 'text-alert-700' : 'text-brand-700'}>{formatDateBn(job.deadline)}</span>}
               />
             )}
             {method && <Fact icon="external" label="আবেদনের মাধ্যম" value={method} />}
@@ -154,7 +156,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
         </section>
       </div>
 
-      <div className="container-page grid gap-8 pt-8 lg:grid-cols-[minmax(0,1fr)_21rem]">
+      <div className="pt-6">
         <div className="min-w-0 space-y-8">
 
           <section aria-labelledby="details-heading">
@@ -199,8 +201,12 @@ export default async function JobDetailPage({ params }: { params: Params }) {
           )}
         </div>
 
-        <aside className="order-first space-y-5 lg:order-none">
-          <section aria-labelledby="apply-heading" className="card p-5 lg:sticky lg:top-32">
+
+      </div>
+
+      </article>
+        <aside className="space-y-5">
+          <section aria-labelledby="apply-heading" className="card p-5 lg:sticky lg:top-6">
             <h2 id="apply-heading" className="font-serif text-lg font-bold text-ink">আবেদন</h2>
             {expired ? (
               <p className="mt-3 text-sm text-muted">আবেদনের সময় শেষ হয়ে গেছে।</p>

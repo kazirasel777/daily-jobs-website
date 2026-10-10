@@ -14,7 +14,7 @@ import { jsonLd, pageMetadata, siteSchema } from '@/lib/seo';
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
-const PER_PAGE = 20;
+const PER_PAGE = 12;
 
 export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
   const page = parsePage((await searchParams).page);
@@ -31,17 +31,6 @@ export async function generateMetadata({ searchParams }: { searchParams: SearchP
     description: SITE.description,
     path: '/',
   });
-}
-
-function todayBn(): string {
-  const parts = new Intl.DateTimeFormat('bn-BD', {
-    timeZone: 'Asia/Dhaka',
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date());
-  return parts;
 }
 
 export default async function Home({ searchParams }: { searchParams: SearchParams }) {
@@ -80,46 +69,25 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
     .map((job) => ({ job, days: daysUntil(job.deadline) }))
     .filter((x): x is { job: typeof x.job; days: number } => x.days !== null && x.days >= 0 && x.days <= 3)
     .sort((a, b) => a.days - b.days);
-  const closingSoon = closingAll.slice(0, 6);
+  const closingSoon = closingAll.slice(0, 5);
   // The count is only exact when every active job fitted in the 50 fetched above.
-  const closingCountExact = closingSource !== null && closingSource.meta.total <= closingSource.data.length;
+
 
   return (
     <>
       {isFirstPage && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(siteSchema()) }} />}
 
       {isFirstPage ? (
-        <section className="relative overflow-hidden border-b border-line bg-[radial-gradient(ellipse_at_top_right,var(--color-marigold-100),transparent_55%),linear-gradient(180deg,#fff_0%,var(--color-paper)_100%)]">
-          <div className="container-page py-10 sm:py-14">
-            <p className="eyebrow">{todayBn()}</p>
-            <h1 className="mt-2 max-w-3xl font-serif text-[1.9rem] font-bold leading-tight text-ink sm:text-[2.6rem]">
-              আজকের চাকরির বিজ্ঞপ্তি, <span className="text-brand-700">এক জায়গায়</span>
-            </h1>
-            <p className="mt-3 max-w-2xl text-base text-ink-soft sm:text-lg">
-              পত্রিকা ও অফিশিয়াল উৎস থেকে সংগ্রহ করা নিয়োগ বিজ্ঞপ্তি — শেষ তারিখ, পদসংখ্যা, কর্মস্থল ও আবেদনের নিয়মসহ।
-            </p>
-
-            <div className="mt-6 max-w-2xl">
-              <SearchForm />
+        <section className="border-b border-line bg-surface">
+          <div className="container-page flex items-center justify-between gap-8 py-7 sm:py-8">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl font-bold leading-snug text-ink sm:text-[2rem]">আপনার পরবর্তী চাকরির খবর, এক জায়গায়</h1>
+              <p className="mt-2 max-w-2xl text-sm text-muted sm:text-base">সরকারি ও বেসরকারি নিয়োগ বিজ্ঞপ্তি, মূল সার্কুলার এবং আবেদনের তথ্য।</p>
+              <div className="mt-5 max-w-2xl"><SearchForm /></div>
             </div>
-
-            <dl className="mt-7 flex flex-wrap gap-x-8 gap-y-3 text-sm">
-              <div>
-                <dt className="text-muted">সক্রিয় বিজ্ঞপ্তি</dt>
-                <dd className="font-serif text-2xl font-bold text-brand-800">{toBnNumber(jobsRes.meta.total)}টি</dd>
-              </div>
-              {recentRes && recentRes.meta.total > 0 && (
-                <div>
-                  <dt className="text-muted">গত ৪৮ ঘণ্টায় নতুন</dt>
-                  <dd className="font-serif text-2xl font-bold text-marigold-700">{toBnNumber(recentRes.meta.total)}টি</dd>
-                </div>
-              )}
-              {closingCountExact && closingAll.length > 0 && (
-                <div>
-                  <dt className="text-muted">৩ দিনের মধ্যে শেষ</dt>
-                  <dd className="font-serif text-2xl font-bold text-alert-700">{toBnNumber(closingAll.length)}টি</dd>
-                </div>
-              )}
+            <dl className="hidden shrink-0 gap-7 text-sm lg:flex">
+              <div><dd className="text-3xl font-bold text-brand-700">{toBnNumber(jobsRes.meta.total)}</dd><dt className="mt-1 text-xs text-muted">সক্রিয় বিজ্ঞপ্তি</dt></div>
+              {recentRes && recentRes.meta.total > 0 && <div><dd className="text-3xl font-bold text-brand-700">{toBnNumber(recentRes.meta.total)}</dd><dt className="mt-1 text-xs text-muted">গত ৪৮ ঘণ্টায় নতুন</dt></div>}
             </dl>
           </div>
         </section>
@@ -133,17 +101,17 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
       )}
 
       {isFirstPage && categories.length > 0 && (
-        <section aria-labelledby="cat-heading" className="container-page pt-10">
-          <h2 id="cat-heading" className="font-serif text-xl font-bold text-ink">বিভাগ অনুযায়ী দেখুন</h2>
-          <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <section aria-labelledby="cat-heading" className="container-page pt-6">
+          <h2 id="cat-heading" className="sr-only">বিভাগ অনুযায়ী দেখুন</h2>
+          <ul className="flex gap-2 overflow-x-auto pb-1">
             {categories.map((c, i) => (
-              <li key={c.slug}>
+              <li key={c.slug} className="shrink-0">
                 <Link
                   href={`/category/${c.slug}`}
-                  className="card flex h-full flex-col justify-between gap-2 p-4 transition-colors hover:border-brand-600 hover:bg-brand-50"
+                  className="card flex h-full shrink-0 items-center gap-2 whitespace-nowrap px-4 py-2 transition-colors hover:border-brand-600 hover:bg-brand-50"
                 >
                   <span className="font-semibold text-ink">{c.name}</span>
-                  <span className="text-sm text-muted">
+                  <span className="text-xs text-muted">
                     {categoryCounts[i] !== undefined ? `${toBnNumber(categoryCounts[i])}টি বিজ্ঞপ্তি` : 'দেখুন'}
                   </span>
                 </Link>
@@ -153,17 +121,17 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
         </section>
       )}
 
-      <div className="container-page grid gap-10 pt-10 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="container-page grid gap-6 pt-6 lg:grid-cols-[minmax(0,1fr)_18.5rem]">
         <section aria-labelledby="latest-heading">
           <div className="mb-4 flex items-end justify-between gap-4">
             <h2 id="latest-heading" className="font-serif text-xl font-bold text-ink">
-              {isFirstPage ? 'সর্বশেষ প্রকাশিত' : `পৃষ্ঠা ${toBnDigits(page)} / ${toBnDigits(jobsRes.meta.last_page)}`}
+              {isFirstPage ? 'সর্বশেষ চাকরির বিজ্ঞপ্তি' : `পৃষ্ঠা ${toBnDigits(page)} / ${toBnDigits(jobsRes.meta.last_page)}`}
             </h2>
             <span className="text-sm text-muted">মোট {toBnNumber(jobsRes.meta.total)}টি</span>
           </div>
 
           {jobsRes.data.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {jobsRes.data.map((job) => (
                 <JobCard key={job.id} job={job} headingLevel="h3" />
               ))}

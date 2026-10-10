@@ -12,15 +12,15 @@ export default function JobCard({ job, headingLevel = 'h2' }: { job: JobListItem
   const Heading = headingLevel;
 
   return (
-    <article className="card group relative flex gap-4 p-4 transition-shadow hover:shadow-[0_6px_24px_-12px_rgba(13,79,54,0.35)] sm:p-5">
+    <article className="card group relative flex flex-col gap-4 p-4 sm:min-h-40 sm:flex-row sm:items-center transition-shadow hover:shadow-[0_6px_24px_-12px_rgba(13,79,54,0.35)] sm:gap-5 sm:p-6">
       {job.thumbnail_url && (
-        <div className="relative hidden h-24 w-20 shrink-0 overflow-hidden rounded-lg border border-line bg-paper sm:block">
+        <div className="relative aspect-video w-32 sm:w-44 lg:w-48 shrink-0 overflow-hidden rounded-lg border border-line bg-paper sm:block">
           <Image
             src={job.thumbnail_url}
             alt=""
             fill
-            sizes="80px"
-            className="object-cover object-top"
+            sizes="(min-width: 1024px) 192px, (min-width: 640px) 176px, 128px"
+            className="object-contain"
           />
         </div>
       )}
@@ -43,7 +43,7 @@ export default function JobCard({ job, headingLevel = 'h2' }: { job: JobListItem
           )}
         </div>
 
-        <Heading className="font-serif text-[1.08rem] font-bold leading-snug text-ink sm:text-lg">
+        <Heading className="text-[1.125rem] font-bold leading-snug text-ink sm:text-xl">
           <Link href={href} className="after:absolute after:inset-0 after:rounded-2xl group-hover:text-brand-700">
             {job.title}
           </Link>

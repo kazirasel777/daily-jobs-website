@@ -4,15 +4,15 @@
    warm paper background for long-form reading. */
 @theme {
   --font-sans: var(--font-bn-sans), 'Noto Sans Bengali', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-serif: var(--font-bn-serif), 'Noto Serif Bengali', Georgia, serif;
+  --font-serif: var(--font-bn-sans), 'Noto Sans Bengali', system-ui, sans-serif;
 
-  --color-paper: #f7f5ef;
+  --color-paper: #f5f7f9;
   --color-surface: #ffffff;
-  --color-line: #e4dfd2;
-  --color-line-strong: #cfc8b6;
-  --color-ink: #17221d;
-  --color-ink-soft: #3d4a43;
-  --color-muted: #5f6b64;
+  --color-line: #e0e7eb;
+  --color-line-strong: #cbd6de;
+  --color-ink: #152c36;
+  --color-ink-soft: #405a65;
+  --color-muted: #647780;
 
   --color-brand-50: #eef6f1;
   --color-brand-100: #d6eadf;
@@ -63,7 +63,7 @@
 @layer components {
   .container-page {
     width: 100%;
-    max-width: 76rem;
+    max-width: 78rem;
     margin-inline: auto;
     padding-inline: 1rem;
   }
@@ -74,7 +74,7 @@
   .card {
     background: var(--color-surface);
     border: 1px solid var(--color-line);
-    border-radius: 1rem;
+    border-radius: 0.75rem;
   }
 
   .eyebrow {
