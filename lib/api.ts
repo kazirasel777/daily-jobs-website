@@ -138,12 +138,16 @@ export async function getAllJobs(): Promise<JobListItem[]> {
   const all: JobListItem[] = [];
   let page = 1;
   let lastPage = 1;
+  const MAX_PAGES = 1000;
   do {
     const res = await getJobs({ page, per_page: 50 });
     all.push(...res.data);
     lastPage = res.meta.last_page || 1;
+    if (lastPage > MAX_PAGES) {
+      throw new Error(`Public job list exceeds sitemap page cap: last_page is ${lastPage} (cap: ${MAX_PAGES})`);
+    }
     page++;
-  } while (page <= lastPage && page <= 1000);
+  } while (page <= lastPage);
   return all;
 }
 
