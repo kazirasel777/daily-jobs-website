@@ -141,7 +141,7 @@ export function buildSitemapData({
   }
 
   // Static informational pages are always indexable, even if jobs = 0
-  for (const path of ['/about', '/contact', '/privacy', '/disclaimer']) {
+  for (const path of ['/about', '/contact', '/privacy', '/disclaimer', '/sources']) {
     entries.push({ url: toUrl(path) });
   }
 

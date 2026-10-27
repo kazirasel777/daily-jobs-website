@@ -50,6 +50,8 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
   const images = [job.thumbnail_url, job.circular_images?.[0]?.url].filter((u): u is string => Boolean(u));
   return pageMetadata({
+    // Archived circulars stay reachable for old links but leave the search index.
+    index: job.availability !== 'archived',
     title: job.seo?.title?.trim() || job.title,
     description: metaDescription(job),
     path: jobPath(job),
@@ -81,7 +83,8 @@ export default async function JobDetailPage({ params }: { params: Params }) {
   if (job.slug && decodeURIComponent(slug) !== job.slug) permanentRedirect(jobPath(job));
 
   const days = daysUntil(job.deadline);
-  const expired = days !== null && days < 0;
+  // The API decides availability (Dhaka day, admin thresholds); the date check covers older API builds.
+  const expired = (job.availability !== undefined && job.availability !== 'active') || job.application_open === false || (days !== null && days < 0);
   const applyLink = !expired && isHttpUrl(job.apply_link) ? job.apply_link : null;
   const method = applicationMethodLabel(job.application_method);
   const images = (job.circular_images ?? []).filter((img): img is { page_number: number; url: string } => Boolean(img.url));
@@ -99,7 +102,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
   return (
     <article>
       {schema && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(schema) }} />}
-      <ViewCounter jobId={job.id} />
+      {!expired && <ViewCounter jobId={job.id} />}
 
       <div className="container-page grid items-start gap-6 py-6 lg:grid-cols-[minmax(0,1fr)_18.5rem]">
       <article className="card min-w-0 p-5 sm:p-7">
@@ -113,7 +116,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                 {job.category.name}
               </Link>
             )}
-            {job.recently_added && <span className="rounded-md bg-marigold-100 px-2 py-0.5 font-bold text-marigold-900">নতুন</span>}
+            {job.recently_added && !expired && <span className="rounded-md bg-marigold-100 px-2 py-0.5 font-bold text-marigold-900">নতুন</span>}
             <DeadlineBadge deadline={job.deadline} precision={job.deadline_precision} />
           </div>
 
@@ -131,7 +134,11 @@ export default async function JobDetailPage({ params }: { params: Params }) {
         <div className="pt-6">
           <p role="status" className="flex items-start gap-2 rounded-xl border border-line-strong bg-stone-100 p-4 text-sm text-ink-soft">
             <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
-            এই বিজ্ঞপ্তির আবেদনের সময় {formatDateBn(job.deadline)} তারিখে শেষ হয়েছে। তথ্যটি শুধু রেফারেন্সের জন্য রাখা হয়েছে।
+            {job.deadline
+              ? <>এই বিজ্ঞপ্তির আবেদনের সময় {formatDateBn(job.deadline)} তারিখে শেষ হয়েছে।</>
+              : <>এই বিজ্ঞপ্তির আবেদনের সময় শেষ হয়েছে।</>}{' '}
+            তথ্যটি শুধু রেফারেন্সের জন্য রাখা হয়েছে — এখন আবেদন করা যাবে না।
+            {job.availability === 'archived' && ' (আর্কাইভ)'}
           </p>
         </div>
       )}
@@ -197,6 +204,73 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                   );
                 })}
               </div>
+            </section>
+          )}
+
+          {job.sources && job.sources.length > 0 && (
+            <section aria-labelledby="sources-heading" className="rounded-2xl border border-line bg-paper/60 p-5 sm:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+                <div className="flex items-center gap-2">
+                  <Icon name="file" className="h-5 w-5 text-brand-700" />
+                  <h2 id="sources-heading" className="font-serif text-lg font-bold text-ink">
+                    তথ্যের উৎস ও প্রকাশনা
+                  </h2>
+                </div>
+                <Link href="/sources" className="text-xs font-semibold text-brand-700 hover:underline">
+                  সকল উৎস ডিরেক্টরি →
+                </Link>
+              </div>
+
+              <p className="mt-3 text-xs leading-5 text-muted">
+                দৈনিক চাকরি কোনো সরকারি প্রতিষ্ঠানের প্রতিনিধিত্ব করে না। প্রকাশের স্বচ্ছতার স্বার্থে মূল বিজ্ঞপ্তি ও প্রচারের উৎস নিচে উল্লেখ করা হলো:
+              </p>
+
+              <ul className="mt-4 divide-y divide-line/60">
+                {job.sources.map((src) => {
+                  const roleLabel =
+                    src.source_role === 'original_notice'
+                      ? 'মূল বিজ্ঞপ্তি / গেজেট'
+                      : src.source_role === 'issuing_authority'
+                      ? 'নিয়োগকারী প্রতিষ্ঠান'
+                      : src.source_role === 'discovery_source'
+                      ? 'পত্রিকা / প্রচার মাধ্যম'
+                      : 'তথ্যসূত্র';
+
+                  return (
+                    <li key={src.id} className="py-3 first:pt-0 last:pb-0">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-ink">{src.source_name}</span>
+                            {src.is_verified && (
+                              <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">
+                                ✓ যাচাইকৃত
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                            <span className="rounded bg-stone-100 px-1.5 py-0.5 text-stone-700">{roleLabel}</span>
+                            {src.publication_date && <span>প্রকাশ: {formatDateBn(src.publication_date)}</span>}
+                            {src.printed_page && <span>{src.printed_page}</span>}
+                          </div>
+                        </div>
+
+                        {src.source_url && (
+                          <a
+                            href={src.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline"
+                          >
+                            মূল উৎস লিংক
+                            <Icon name="external" className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             </section>
           )}
         </div>

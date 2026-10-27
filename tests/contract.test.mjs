@@ -51,6 +51,30 @@ test('API query builder caps per_page at 50 to avoid Laravel 422 validation erro
   assert.equal(query.includes('per_page=100'), false);
 });
 
+function buildSourcesQuery(params = {}) {
+  const query = new URLSearchParams();
+  if (params.category && params.category !== 'all') query.set('category', params.category);
+  if (params.q?.trim()) query.set('q', params.q.trim());
+  if (params.page && params.page > 1) query.set('page', String(params.page));
+  if (params.per_page) query.set('per_page', String(Math.min(params.per_page, 50)));
+  return query.toString();
+}
+
+test('Sources API query builder omits category when "all" is selected and filters category correctly', () => {
+  const queryAll = buildSourcesQuery({ category: 'all' });
+  assert.equal(queryAll.includes('category'), false);
+
+  const queryGovt = buildSourcesQuery({ category: 'govt_jobs', page: 2 });
+  assert.equal(queryGovt.includes('category=govt_jobs'), true);
+  assert.equal(queryGovt.includes('page=2'), true);
+});
+
+test('Sources API query builder caps per_page at 50 and handles search query', () => {
+  const query = buildSourcesQuery({ q: 'বিপিএসসি', per_page: 100 });
+  assert.equal(query.includes('per_page=50'), true);
+  assert.equal(new URLSearchParams(query).get('q'), 'বিপিএসসি');
+});
+
 // Sitemap date validation simulation
 function parseValidDate(dateValue) {
   if (!dateValue) return undefined;
@@ -527,6 +551,7 @@ test('Production sitemap: full success with published jobs generates job, catego
   assert.ok(urls.includes('https://dailyjobs.bd/job/bank-officer-job'), 'Bank job URL must be present');
   assert.ok(urls.includes('https://dailyjobs.bd/about'), 'Static /about must be present');
   assert.ok(urls.includes('https://dailyjobs.bd/contact'), 'Static /contact must be present');
+  assert.ok(urls.includes('https://dailyjobs.bd/sources'), 'Static /sources must be present');
   assert.equal(urls.includes('https://dailyjobs.bd/question-bank'), false, 'Sub-threshold study pages must be excluded');
 
   // Verify stored in cache

@@ -6,6 +6,7 @@ import type {
   JobCategory,
   JobListItem,
   JobDetail,
+  DirectorySourceItem,
   PaginatedResponse,
   SingleResponse,
   Subject,
@@ -23,6 +24,7 @@ export const REVALIDATE = {
   jobDetail: 300,
   taxonomy: 3600,
   study: 900,
+  sources: 900,
 } as const;
 
 /** Thrown when the API is unreachable or answers with an unexpected error. */
@@ -123,13 +125,14 @@ export async function getJobs(params: GetJobsParams = {}): Promise<PaginatedResp
 }
 
 /**
- * Detail for a published, not-yet-expired job. `null` means the API reports it as
- * unavailable (draft, expired or deleted — the API does not say which).
+ * Detail for a published job, including ones whose deadline has passed (`availability`
+ * tells which; old URLs keep working with an expired notice). `null` means the API
+ * reports it as unavailable (draft, never published, or deleted).
  */
 export async function getJobDetail(slugOrId: string): Promise<JobDetail | null> {
   const clean = slugOrId?.trim();
   if (!clean || clean.length > 255) return null;
-  const res = await apiFetch<SingleResponse<JobDetail>>(`/jobs/${encodeURIComponent(clean)}`, REVALIDATE.jobDetail);
+  const res = await apiFetch<SingleResponse<JobDetail>>(`/jobs/${encodeURIComponent(clean)}?include_expired=1`, REVALIDATE.jobDetail);
   return res?.data ?? null;
 }
 
@@ -149,6 +152,32 @@ export async function getAllJobs(): Promise<JobListItem[]> {
     page++;
   } while (page <= lastPage);
   return all;
+}
+
+// -------------------------------------------------------------
+// Public sources directory
+// -------------------------------------------------------------
+export interface GetJobSourcesParams {
+  category?: string;
+  q?: string;
+  page?: number;
+  per_page?: number;
+}
+
+export async function getJobSources(params: GetJobSourcesParams = {}): Promise<PaginatedResponse<DirectorySourceItem>> {
+  const query = new URLSearchParams();
+  if (params.category && params.category !== 'all') query.set('category', params.category);
+  if (params.q?.trim()) query.set('q', params.q.trim());
+  if (params.page && params.page > 1) query.set('page', String(params.page));
+  if (params.per_page) query.set('per_page', String(Math.min(params.per_page, 50)));
+
+  const qs = query.toString();
+  const endpoint = `/sources${qs ? `?${qs}` : ''}`;
+  const res = await apiFetch<PaginatedResponse<DirectorySourceItem>>(endpoint, REVALIDATE.sources);
+  if (!res) {
+    throw new ApiUnavailableError(endpoint, 'No response received from sources endpoint');
+  }
+  return res;
 }
 
 // -------------------------------------------------------------

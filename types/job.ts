@@ -21,7 +21,12 @@ export interface JobListItem {
   updated_at?: string | null;
   recently_added: boolean;
   thumbnail_url: string | null;
+  /** Older API builds omit these; treat missing as active. */
+  availability?: JobAvailability;
+  application_open?: boolean;
 }
+
+export type JobAvailability = 'active' | 'recently_expired' | 'expired' | 'archived';
 
 export interface CircularImage {
   page_number: number;
@@ -33,6 +38,35 @@ export interface JobDetailSeo {
   description: string | null;
 }
 
+export interface PublicJobSource {
+  id: number;
+  source_name: string;
+  source_role: 'original_notice' | 'issuing_authority' | 'discovery_source' | 'other' | string;
+  source_type: string;
+  source_url: string | null;
+  publication_date: string | null;
+  printed_page: string | null;
+  is_verified: boolean;
+}
+
+export interface DirectorySourceItem {
+  source_name: string;
+  source_role: string;
+  source_type: string;
+  source_url: string | null;
+  is_verified: boolean;
+  job_count: number;
+  latest_date: string | null;
+  categories: Array<{ slug: string; name: string }>;
+  recent_jobs: Array<{
+    id: number;
+    slug: string;
+    title: string;
+    deadline: string | null;
+    availability?: JobAvailability;
+  }>;
+}
+
 export interface JobDetail extends JobListItem {
   deadline_precision: string | null;
   application_method: string | null;
@@ -42,6 +76,7 @@ export interface JobDetail extends JobListItem {
   circular_images: CircularImage[];
   seo: JobDetailSeo;
   updated_at: string | null;
+  sources?: PublicJobSource[];
 }
 
 export interface PaginationMeta {

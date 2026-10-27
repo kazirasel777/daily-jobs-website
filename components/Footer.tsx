@@ -47,6 +47,7 @@ export default function Footer({ categories }: { categories: JobCategory[] }) {
             <li><Link href="/contact" className="hover:text-white hover:underline">যোগাযোগ</Link></li>
             <li><Link href="/privacy" className="hover:text-white hover:underline">গোপনীয়তা নীতি</Link></li>
             <li><Link href="/disclaimer" className="hover:text-white hover:underline">দায়মুক্তি</Link></li>
+            <li><Link href="/sources" className="hover:text-white hover:underline">তথ্যের উৎস</Link></li>
           </ul>
         </nav>
       </div>
