@@ -1,10 +1,20 @@
 // File: components/Footer.tsx
+'use client';
+
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Logo } from '@/components/Logo';
 import { SITE } from '@/lib/site';
+import HomeFooter from '@/components/home/HomeFooter';
 import type { JobCategory } from '@/types/job';
 
 export default function Footer({ categories }: { categories: JobCategory[] }) {
+  const pathname = usePathname();
+
+  if (pathname === '/') {
+    return <HomeFooter />;
+  }
+
   const year = new Date().getFullYear();
 
   return (

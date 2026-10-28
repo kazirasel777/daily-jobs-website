@@ -1,0 +1,72 @@
+// File: components/home/HomeCategories.tsx
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import HomeIcon, { type HomeIconName } from './HomeIcons';
+import { toBnNumber } from '@/lib/format';
+import type { JobCategory } from '@/types/job';
+
+interface HomeCategoriesProps {
+  categories: JobCategory[];
+  totalJobs: number;
+  categoryCounts: number[];
+}
+
+function getCategoryIcon(slug: string): HomeIconName {
+  if (slug.includes('govt')) return 'building';
+  if (slug.includes('bank')) return 'bank';
+  if (slug.includes('private') || slug.includes('company')) return 'case';
+  if (slug.includes('ngo')) return 'heart';
+  return 'case';
+}
+
+export default function HomeCategories({
+  categories,
+  totalJobs,
+  categoryCounts,
+}: HomeCategoriesProps) {
+  const [isOpen, setIsOpen] = useState(true);
+
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 800px)');
+    const onChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      setIsOpen(!e.matches);
+    };
+    onChange(mql);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+
+  return (
+    <details
+      className="home-categories home-panel"
+      id="category-panel"
+      open={isOpen}
+      onToggle={(e) => setIsOpen(e.currentTarget.open)}
+    >
+      <summary>
+        <HomeIcon name="grid" />
+        বিভাগ অনুযায়ী দেখুন
+        <HomeIcon name="chevron" className="chevron" />
+      </summary>
+      <div className="home-category-list">
+        <Link href="/#jobs-heading" className="home-category active">
+          <HomeIcon name="grid" />
+          <span>সকল চাকরি</span>
+          <span className="count">{toBnNumber(totalJobs)}</span>
+        </Link>
+        {categories.map((c, i) => {
+          const count = categoryCounts[i];
+          return (
+            <Link key={c.slug} href={`/category/${c.slug}`} className="home-category">
+              <HomeIcon name={getCategoryIcon(c.slug)} />
+              <span>{c.name}</span>
+              <span className="count">{count !== undefined ? toBnNumber(count) : '—'}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </details>
+  );
+}

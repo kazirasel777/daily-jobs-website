@@ -1,9 +1,19 @@
+'use client';
+
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Logo } from '@/components/Logo';
 import NavStrip, { type NavItem } from '@/components/NavStrip';
+import HomeHeader from '@/components/home/HomeHeader';
 import type { JobCategory } from '@/types/job';
 
 export default function Header({ categories }: { categories: JobCategory[] }) {
+  const pathname = usePathname();
+
+  if (pathname === '/') {
+    return <HomeHeader />;
+  }
+
   const items: NavItem[] = [
     { href: '/', label: 'প্রথম পাতা' },
     { href: '/#latest-heading', label: 'সকল চাকরি' },
