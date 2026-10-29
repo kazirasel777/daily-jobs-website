@@ -1,71 +1,88 @@
 // File: components/Footer.tsx
-'use client';
-
-import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Logo } from '@/components/Logo';
+import Image from 'next/image';
 import { SITE } from '@/lib/site';
-import HomeFooter from '@/components/home/HomeFooter';
 import type { JobCategory } from '@/types/job';
 
-export default function Footer({ categories }: { categories: JobCategory[] }) {
-  const pathname = usePathname();
-
-  if (pathname === '/') {
-    return <HomeFooter />;
-  }
-
+export default function Footer({ categories = [] }: { categories?: JobCategory[] }) {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="mt-16 bg-brand-950 text-brand-100">
-      <div className="container-page grid gap-10 py-12 md:grid-cols-12">
-        <div className="md:col-span-5">
-          <Link href="/" aria-label="দৈনিক চাকরি — প্রথম পাতা" className="inline-block rounded-lg">
-            <Logo inverted />
-          </Link>
-          <p className="mt-4 max-w-md text-sm leading-7 text-brand-100/85">
-            জাতীয় দৈনিক ও প্রতিষ্ঠানের অফিশিয়াল উৎস থেকে চাকরির বিজ্ঞপ্তি সংগ্রহ করে আমরা পাঠযোগ্যভাবে প্রকাশ করি।
-            দৈনিক চাকরি কোনো সরকারি প্রতিষ্ঠান বা নিয়োগকারী সংস্থা নয় এবং এই সাইটে কোনো আবেদন গ্রহণ করা হয় না।
+    <footer className="premium-footer" id="site-footer">
+      <div className="wrap">
+        <div className="footer-promise">
+          <span className="footer-kicker">আপনার পরের সুযোগের ঠিকানা</span>
+          <p>
+            সঠিক তথ্য থেকে<br />
+            <strong>সঠিক সিদ্ধান্ত।</strong>
           </p>
-          <p className="mt-3 text-sm text-brand-100/85">
-            যোগাযোগ:{' '}
-            <a href={`mailto:${SITE.email}`} className="font-semibold text-white underline underline-offset-4">
-              {SITE.email}
-            </a>
-          </p>
+          <div className="footer-process">
+            <span>০১ <b>চাকরি খুঁজুন</b></span>
+            <span>০২ <b>মূল সূত্র মিলিয়ে নিন</b></span>
+            <span>০৩ <b>সরাসরি আবেদন করুন</b></span>
+          </div>
         </div>
 
-        <nav aria-label="চাকরির বিভাগ" className="md:col-span-3">
-          <h2 className="font-serif text-base font-bold text-white">চাকরির বিভাগ</h2>
-          <ul className="mt-4 space-y-2.5 text-sm">
-            <li><Link href="/" className="hover:text-white hover:underline">সর্বশেষ সব বিজ্ঞপ্তি</Link></li>
+        <div className="footer-columns">
+          <div className="footer-about">
+            <Link className="footer-brand" href="/" aria-label="দৈনিক চাকরি — প্রথম পাতা">
+              <Image
+                src="/brand/dainik-chakri-logo.png"
+                alt="দৈনিক চাকরি"
+                width={112}
+                height={68}
+                style={{ width: '112px', height: 'auto', display: 'block' }}
+              />
+            </Link>
+            <p>
+              চাকরির খবর, নিয়োগের পরের আপডেট ও প্রস্তুতি—একটি গোছানো ঠিকানায়। মূল সূত্রের তথ্য সহজভাবে আপনার কাছে পৌঁছে দেওয়াই আমাদের লক্ষ্য।
+            </p>
+            <a className="footer-mail" href={`mailto:${SITE.email}`}>
+              {SITE.email} ↗
+            </a>
+          </div>
+
+          <nav aria-label="চাকরির বিভাগ">
+            <h3>সুযোগ খুঁজুন</h3>
+            <Link href="/#jobs-heading">সকল চাকরি</Link>
             {categories.map((c) => (
-              <li key={c.slug}>
-                <Link href={`/category/${c.slug}`} className="hover:text-white hover:underline">{c.name}</Link>
-              </li>
+              <Link key={c.slug} href={`/category/${c.slug}`}>
+                {c.name}
+              </Link>
             ))}
-          </ul>
-        </nav>
+          </nav>
 
-        <nav aria-label="প্রস্তুতি ও তথ্য" className="md:col-span-4">
-          <h2 className="font-serif text-base font-bold text-white">প্রস্তুতি ও তথ্য</h2>
-          <ul className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
-            <li><Link href="/question-bank" className="hover:text-white hover:underline">প্রশ্নব্যাংক</Link></li>
-            <li><Link href="/current-affairs" className="hover:text-white hover:underline">সাধারণ জ্ঞান</Link></li>
-            <li><Link href="/about" className="hover:text-white hover:underline">আমাদের সম্পর্কে</Link></li>
-            <li><Link href="/contact" className="hover:text-white hover:underline">যোগাযোগ</Link></li>
-            <li><Link href="/privacy" className="hover:text-white hover:underline">গোপনীয়তা নীতি</Link></li>
-            <li><Link href="/disclaimer" className="hover:text-white hover:underline">দায়মুক্তি</Link></li>
-            <li><Link href="/sources" className="hover:text-white hover:underline">তথ্যের উৎস</Link></li>
-          </ul>
-        </nav>
-      </div>
+          <nav aria-label="প্রস্তুতি ও আপডেট">
+            <h3>আরও এগিয়ে থাকুন</h3>
+            <Link href="/#notices">নোটিশ ও ফলাফল</Link>
+            <Link href="/question-bank">প্রশ্নব্যাংক ও প্রস্তুতি</Link>
+            <Link href="/current-affairs">সাধারণ জ্ঞান</Link>
+            <Link href="/sources">তথ্যের উৎস ↗</Link>
+            <Link href="/about">আমাদের সম্পর্কে</Link>
+          </nav>
 
-      <div className="border-t border-white/10">
-        <div className="container-page flex flex-col gap-2 py-5 text-xs text-brand-100/70 sm:flex-row sm:items-center sm:justify-between">
-          <p>© {year} {SITE.name} ({SITE.nameEn})</p>
-          <p>আবেদনের আগে মূল বিজ্ঞপ্তি ও নিয়োগকারীর অফিশিয়াল ওয়েবসাইট যাচাই করুন।</p>
+          <nav aria-label="সাইটের তথ্য">
+            <h3>জেনে রাখুন</h3>
+            <Link href="/contact">যোগাযোগ</Link>
+            <Link href="/privacy">গোপনীয়তা নীতি</Link>
+            <Link href="/disclaimer">দায়মুক্তি</Link>
+          </nav>
+        </div>
+
+        <div className="footer-trust">
+          <span className="trust-mark">i</span>
+          <p>
+            দৈনিক চাকরি কোনো সরকারি প্রতিষ্ঠান বা নিয়োগকারী সংস্থা নয়। এখানে আবেদন গ্রহণ বা নিয়োগের নিশ্চয়তা দেওয়া হয় না। আবেদনের আগে মূল বিজ্ঞপ্তি ও নিয়োগকারীর নির্ধারিত মাধ্যম যাচাই করুন।
+          </p>
+          <Link href="/sources">
+            আমাদের তথ্যের উৎস <span>↗</span>
+          </Link>
+        </div>
+
+        <div className="premium-bottom">
+          <span>© {year} {SITE.name} · {SITE.nameEn.toUpperCase()}</span>
+          <span>আবেদনের আগে মূল বিজ্ঞপ্তি ও নিয়োগকারীর অফিশিয়াল ওয়েবসাইট যাচাই করুন।</span>
+          <a href="#main">উপরে ফিরুন ↑</a>
         </div>
       </div>
     </footer>

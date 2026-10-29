@@ -2,12 +2,17 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import HomeIcon from './HomeIcons';
 
 export default function HomeHeader() {
+  const pathname = usePathname();
   const [query, setQuery] = useState('');
+
+  const isQuestionBank = pathname?.startsWith('/question-bank');
+  const isJobs = !isQuestionBank && (pathname === '/' || pathname?.startsWith('/job') || pathname?.startsWith('/category') || pathname?.startsWith('/search'));
 
   return (
     <header className="home-header">
@@ -30,16 +35,20 @@ export default function HomeHeader() {
         </Link>
 
         <nav className="home-nav" aria-label="প্রধান মেনু">
-          <Link href="/#jobs-heading" className="active">
+          <Link href="/#jobs-heading" className={isJobs ? 'active' : ''}>
             চাকরির বিজ্ঞপ্তি
           </Link>
           <Link href="/#notices">নোটিশ ও ফলাফল</Link>
-          <Link href="/#question-bank">প্রশ্নব্যাংক</Link>
+          <Link href="/question-bank" className={isQuestionBank ? 'active' : ''}>
+            প্রশ্নব্যাংক
+          </Link>
         </nav>
 
         <nav className="home-mobile-nav" aria-label="দ্রুত মেনু">
           <Link href="/#notices">নোটিশ</Link>
-          <Link href="/#question-bank">প্রশ্নব্যাংক</Link>
+          <Link href="/question-bank" className={isQuestionBank ? 'active' : ''}>
+            প্রশ্নব্যাংক
+          </Link>
         </nav>
 
         <form className="home-search" role="search" action="/search" method="get">

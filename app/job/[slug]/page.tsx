@@ -2,9 +2,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, permanentRedirect } from 'next/navigation';
-import Breadcrumbs from '@/components/Breadcrumbs';
 import DeadlineBadge from '@/components/DeadlineBadge';
 import Icon from '@/components/Icon';
+import HomeIcon from '@/components/home/HomeIcons';
 import ViewCounter from '@/components/ViewCounter';
 import { getJobDetail, getJobs } from '@/lib/api';
 import {
@@ -62,16 +62,11 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   });
 }
 
-function Fact({ label, value, icon }: { label: string; value: React.ReactNode; icon: Parameters<typeof Icon>[0]['name'] }) {
-  return (
-    <div className="flex gap-2.5 p-3.5 sm:gap-3 sm:p-4">
-      <Icon name={icon} className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" />
-      <div className="min-w-0">
-        <dt className="text-xs font-semibold text-muted">{label}</dt>
-        <dd className="mt-0.5 font-semibold text-ink">{value}</dd>
-      </div>
-    </div>
-  );
+function getCategoryClass(slug?: string): string {
+  if (slug === 'bank_jobs') return 'tag bank';
+  if (slug === 'private_jobs') return 'tag private';
+  if (slug === 'ngo_education') return 'tag ngo';
+  return 'tag';
 }
 
 export default async function JobDetailPage({ params }: { params: Params }) {
@@ -94,80 +89,106 @@ export default async function JobDetailPage({ params }: { params: Params }) {
     ? (await getJobs({ category: job.category.slug, per_page: 6 }).catch(() => null))?.data.filter((j) => j.id !== job.id).slice(0, 4) ?? []
     : [];
 
-  const crumbs = [
-    ...(job.category ? [{ name: job.category.name, path: `/category/${job.category.slug}` }] : []),
-    { name: job.title, path: jobPath(job) },
-  ];
-
   return (
-    <article>
+    <article className="detail-wrap wrap">
       {schema && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(schema) }} />}
       {!expired && <ViewCounter jobId={job.id} />}
 
-      <div className="container-page grid items-start gap-6 py-6 lg:grid-cols-[minmax(0,1fr)_18.5rem]">
-      <article className="card min-w-0 p-5 sm:p-7">
-      <header>
-        <div className="">
-          <Breadcrumbs items={crumbs} />
+      <nav className="detail-breadcrumb" aria-label="অবস্থান">
+        <Link href="/">প্রথম পাতা</Link>
+        <span>›</span>
+        {job.category && (
+          <>
+            <Link href={`/category/${job.category.slug}`}>{job.category.name}</Link>
+            <span>›</span>
+          </>
+        )}
+        <span>{job.title}</span>
+      </nav>
 
-          <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
-            {job.category && (
-              <Link href={`/category/${job.category.slug}`} className="rounded-md bg-brand-50 px-2 py-0.5 font-bold text-brand-700 hover:bg-brand-100">
-                {job.category.name}
-              </Link>
+      <div className="detail-grid">
+        <div className="detail-body">
+          <header className="detail-hero">
+            <div className="detail-labels">
+              {job.category && (
+                <Link href={`/category/${job.category.slug}`} className={getCategoryClass(job.category.slug)}>
+                  {job.category.name}
+                </Link>
+              )}
+              {job.recently_added && !expired && <span className="new">নতুন বিজ্ঞপ্তি</span>}
+              <DeadlineBadge deadline={job.deadline} precision={job.deadline_precision} />
+            </div>
+
+            <h1>{job.title}</h1>
+
+            {job.organization_name && (
+              <div className="detail-org">
+                <HomeIcon name="building" />
+                <span>{job.organization_name}</span>
+              </div>
             )}
-            {job.recently_added && !expired && <span className="rounded-md bg-marigold-100 px-2 py-0.5 font-bold text-marigold-900">নতুন</span>}
-            <DeadlineBadge deadline={job.deadline} precision={job.deadline_precision} />
-          </div>
 
-          <h1 className="mt-3 max-w-4xl font-serif text-[1.6rem] font-bold leading-snug text-ink sm:text-[1.9rem]">{job.title}</h1>
-          {job.organization_name && (
-            <p className="mt-2 flex items-center gap-2 text-lg text-ink-soft">
-              <Icon name="building" className="h-5 w-5 text-muted" />
-              {job.organization_name}
-            </p>
+            <dl className="fact-grid">
+              <div>
+                <dt>পদসংখ্যা</dt>
+                <dd>{job.vacancies !== null && job.vacancies > 0 ? `${toBnNumber(job.vacancies)} জন` : 'বিজ্ঞপ্তি অনুযায়ী'}</dd>
+              </div>
+              <div>
+                <dt>কর্মস্থল</dt>
+                <dd>{job.location || 'বিজ্ঞপ্তি অনুযায়ী'}</dd>
+              </div>
+              <div>
+                <dt>বিজ্ঞপ্তি প্রকাশ</dt>
+                <dd>{job.circular_published_date ? formatDateBn(job.circular_published_date) : job.published_at ? formatDateBn(job.published_at) : 'বিজ্ঞপ্তি অনুযায়ী'}</dd>
+              </div>
+              <div>
+                <dt>আবেদনের মাধ্যম</dt>
+                <dd>{method || 'মূল বিজ্ঞপ্তি অনুযায়ী'}</dd>
+              </div>
+              <div>
+                <dt>{job.deadline_precision === 'approximate' ? 'আবেদনের শেষ তারিখ (আনুমানিক)' : 'আবেদনের শেষ তারিখ'}</dt>
+                <dd className={expired ? 'text-muted line-through' : 'accent'}>
+                  {job.deadline ? formatDateBn(job.deadline) : 'বিজ্ঞপ্তি অনুযায়ী'}
+                </dd>
+              </div>
+              <div>
+                <dt>বেতন ও সুযোগ-সুবিধা</dt>
+                <dd>বিজ্ঞপ্তি অনুযায়ী</dd>
+              </div>
+            </dl>
+
+            <div className="detail-meta">
+              {job.published_at && <span>প্রকাশ: {formatDateBn(job.published_at)}</span>}
+              {job.updated_at && job.updated_at !== job.published_at && (
+                <span>সর্বশেষ হালনাগাদ: {formatDateBn(job.updated_at)}</span>
+              )}
+            </div>
+
+            <nav className="section-nav" aria-label="এই বিজ্ঞপ্তিতে">
+              <a href="#overview">বিস্তারিত</a>
+              {job.application_instructions && <a href="#application">আবেদনের নিয়ম</a>}
+              {images.length > 0 && <a href="#circular">মূল বিজ্ঞপ্তি</a>}
+              {job.sources && job.sources.length > 0 && <a href="#sources">তথ্যের উৎস</a>}
+            </nav>
+          </header>
+
+          {expired && (
+            <div style={{ marginTop: '20px' }}>
+              <p role="status" className="flex items-start gap-2 rounded-xl border border-line-strong bg-stone-100 p-4 text-sm text-ink-soft">
+                <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
+                {job.deadline
+                  ? <>এই বিজ্ঞপ্তির আবেদনের সময় {formatDateBn(job.deadline)} তারিখে শেষ হয়েছে।</>
+                  : <>এই বিজ্ঞপ্তির আবেদনের সময় শেষ হয়েছে।</>}{' '}
+                তথ্যটি শুধু রেফারেন্সের জন্য রাখা হয়েছে — এখন আবেদন করা যাবে না।
+                {job.availability === 'archived' && ' (আর্কাইভ)'}
+              </p>
+            </div>
           )}
-        </div>
-      </header>
 
-      {expired && (
-        <div className="pt-6">
-          <p role="status" className="flex items-start gap-2 rounded-xl border border-line-strong bg-stone-100 p-4 text-sm text-ink-soft">
-            <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
-            {job.deadline
-              ? <>এই বিজ্ঞপ্তির আবেদনের সময় {formatDateBn(job.deadline)} তারিখে শেষ হয়েছে।</>
-              : <>এই বিজ্ঞপ্তির আবেদনের সময় শেষ হয়েছে।</>}{' '}
-            তথ্যটি শুধু রেফারেন্সের জন্য রাখা হয়েছে — এখন আবেদন করা যাবে না।
-            {job.availability === 'archived' && ' (আর্কাইভ)'}
-          </p>
-        </div>
-      )}
-
-      <div className="pt-6">
-        <section aria-labelledby="facts-heading" className="card overflow-hidden">
-          <h2 id="facts-heading" className="sr-only">এক নজরে</h2>
-          <dl className="-mb-px -mr-px grid grid-cols-2 lg:grid-cols-3 [&>div]:border-b [&>div]:border-r [&>div]:border-line">
-            {job.vacancies !== null && job.vacancies > 0 && <Fact icon="users" label="পদসংখ্যা" value={`${toBnNumber(job.vacancies)} জন`} />}
-            {job.location && <Fact icon="pin" label="কর্মস্থল" value={job.location} />}
-            {job.circular_published_date && <Fact icon="file" label="বিজ্ঞপ্তি প্রকাশ" value={formatDateBn(job.circular_published_date)} />}
-            {job.apply_start_date && <Fact icon="calendar" label="আবেদন শুরু" value={formatDateBn(job.apply_start_date)} />}
-            {job.deadline && (
-              <Fact
-                icon="clock"
-                label={job.deadline_precision === 'approximate' ? 'আবেদনের শেষ তারিখ (আনুমানিক)' : 'আবেদনের শেষ তারিখ'}
-                value={<span className={expired ? 'text-muted line-through' : days !== null && days <= 3 ? 'text-alert-700' : 'text-brand-700'}>{formatDateBn(job.deadline)}</span>}
-              />
-            )}
-            {method && <Fact icon="external" label="আবেদনের মাধ্যম" value={method} />}
-          </dl>
-        </section>
-      </div>
-
-      <div className="pt-6">
-        <div className="min-w-0 space-y-8">
-
-          <section aria-labelledby="details-heading">
-            <h2 id="details-heading" className="font-serif text-xl font-bold text-ink">বিজ্ঞপ্তির বিস্তারিত</h2>
+          <section className="detail-section" id="overview">
+            <h2>
+              <span className="section-number">০১</span> বিজ্ঞপ্তির বিস্তারিত
+            </h2>
             {job.description ? (
               <div className="prose-bn mt-4" dangerouslySetInnerHTML={{ __html: sanitizeRichText(job.description) }} />
             ) : (
@@ -177,19 +198,32 @@ export default async function JobDetailPage({ params }: { params: Params }) {
             )}
           </section>
 
-          {images.length > 0 && (
-            <section aria-labelledby="circular-heading">
-              <h2 id="circular-heading" className="font-serif text-xl font-bold text-ink">
-                মূল বিজ্ঞপ্তি <span className="text-base font-semibold text-muted">({toBnDigits(images.length)} পাতা)</span>
+          {job.application_instructions && (
+            <section className="detail-section" id="application">
+              <h2>
+                <span className="section-number">০২</span> যেভাবে আবেদন করবেন
               </h2>
-              <p className="mt-1 text-sm text-muted">ছবিতে ক্লিক করলে পূর্ণ আকারে খুলবে।</p>
-              <div className="mt-4 space-y-5">
+              <div className="prose-bn mt-4 whitespace-pre-line [overflow-wrap:anywhere]">
+                {job.application_instructions}
+              </div>
+            </section>
+          )}
+
+          {images.length > 0 && (
+            <section className="detail-section" id="circular">
+              <h2>
+                <span className="section-number">{job.application_instructions ? '০৩' : '০২'}</span> মূল বিজ্ঞপ্তি{' '}
+                <span style={{ fontSize: '14px', color: 'var(--muted)', fontWeight: 500 }}>
+                  ({toBnDigits(images.length)} পাতা)
+                </span>
+              </h2>
+              <p style={{ marginTop: '6px', fontSize: '13px', color: 'var(--muted)' }}>ছবিতে ক্লিক করলে পূর্ণ আকারে খুলবে।</p>
+              <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {images.map((img, idx) => {
                   const n = img.page_number || idx + 1;
                   return (
-                    <figure key={`${n}-${idx}`} className="card overflow-hidden">
-                      <a href={img.url} target="_blank" rel="noopener" className="block bg-white">
-                        {/* Scanned circulars have unknown dimensions; a plain lazy image keeps them readable at full width. */}
+                    <figure key={`${n}-${idx}`} className="circular-sheet">
+                      <a href={img.url} target="_blank" rel="noopener noreferrer" className="block bg-white">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={img.url}
@@ -199,7 +233,9 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                           className="block h-auto w-full"
                         />
                       </a>
-                      <figcaption className="border-t border-line px-4 py-2 text-xs text-muted">পাতা {toBnDigits(n)}</figcaption>
+                      <figcaption style={{ borderTop: '1px solid var(--line)', padding: '10px 4px 0', marginTop: '10px', fontSize: '12px', color: 'var(--muted)' }}>
+                        পাতা {toBnDigits(n)}
+                      </figcaption>
                     </figure>
                   );
                 })}
@@ -208,20 +244,17 @@ export default async function JobDetailPage({ params }: { params: Params }) {
           )}
 
           {job.sources && job.sources.length > 0 && (
-            <section aria-labelledby="sources-heading" className="rounded-2xl border border-line bg-paper/60 p-5 sm:p-6">
+            <section className="detail-section" id="sources">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
-                <div className="flex items-center gap-2">
-                  <Icon name="file" className="h-5 w-5 text-brand-700" />
-                  <h2 id="sources-heading" className="font-serif text-lg font-bold text-ink">
-                    তথ্যের উৎস ও প্রকাশনা
-                  </h2>
-                </div>
-                <Link href="/sources" className="text-xs font-semibold text-brand-700 hover:underline">
+                <h2>
+                  <span className="section-number">{images.length > 0 ? (job.application_instructions ? '০৪' : '০৩') : (job.application_instructions ? '০৩' : '০২')}</span> তথ্যের উৎস ও প্রকাশনা
+                </h2>
+                <Link href="/sources" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--green)' }}>
                   সকল উৎস ডিরেক্টরি →
                 </Link>
               </div>
 
-              <p className="mt-3 text-xs leading-5 text-muted">
+              <p style={{ marginTop: '12px', fontSize: '13px', lineHeight: 1.8, color: 'var(--muted)' }}>
                 দৈনিক চাকরি কোনো সরকারি প্রতিষ্ঠানের প্রতিনিধিত্ব করে না। প্রকাশের স্বচ্ছতার স্বার্থে মূল বিজ্ঞপ্তি ও প্রচারের উৎস নিচে উল্লেখ করা হলো:
               </p>
 
@@ -275,71 +308,82 @@ export default async function JobDetailPage({ params }: { params: Params }) {
           )}
         </div>
 
+        <aside className="detail-sidebar" aria-label="আবেদন ও প্রয়োজনীয় তথ্য">
+          <section className="apply-panel">
+            <h2>পরের ধাপ: আবেদন</h2>
+            <p>যোগ্যতা মিলিয়ে মূল বিজ্ঞপ্তির নির্দেশনা অনুসরণ করুন।</p>
 
-      </div>
+            <div className="apply-deadline">
+              <span>আবেদনের শেষ তারিখ</span>
+              <strong>{job.deadline ? formatDateBn(job.deadline) : 'বিজ্ঞপ্তি অনুযায়ী'}</strong>
+            </div>
 
-      </article>
-        <aside className="space-y-5">
-          <section aria-labelledby="apply-heading" className="card p-5 lg:sticky lg:top-6">
-            <h2 id="apply-heading" className="font-serif text-lg font-bold text-ink">আবেদন</h2>
             {expired ? (
-              <p className="mt-3 text-sm text-muted">আবেদনের সময় শেষ হয়ে গেছে।</p>
-            ) : (
+              <span className="primary-action" style={{ opacity: 0.65, cursor: 'not-allowed', background: '#728079' }}>
+                আবেদনের সময় শেষ
+              </span>
+            ) : applyLink ? (
               <>
-                {applyLink ? (
-                  <>
-                    <a
-                      href={applyLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-800 px-4 py-3.5 text-base font-bold text-white transition-colors hover:bg-brand-700"
-                    >
-                      নিয়োগকারীর সাইটে আবেদন
-                      <Icon name="external" className="h-4 w-4" />
-                    </a>
-                    <p className="mt-2 break-all text-center text-xs text-muted">{new URL(applyLink).hostname}</p>
-                  </>
-                ) : (
-                  <p className="mt-3 text-sm text-ink-soft">
-                    অনলাইন আবেদনের লিংক দেওয়া নেই। নিচের নিয়ম ও মূল বিজ্ঞপ্তি অনুযায়ী আবেদন করুন।
-                  </p>
-                )}
-                {job.application_instructions && (
-                  <div className="mt-4 rounded-xl bg-paper p-4 text-sm leading-7 text-ink-soft">
-                    <h3 className="mb-1 font-bold text-ink">আবেদনের নিয়ম</h3>
-                    <p className="whitespace-pre-line [overflow-wrap:anywhere]">{job.application_instructions}</p>
-                  </div>
-                )}
+                <a
+                  href={applyLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="primary-action"
+                >
+                  নিয়োগকারীর সাইটে আবেদন ↗
+                </a>
+                <p style={{ marginTop: '8px', textAlign: 'center', fontSize: '11px', color: 'var(--muted)', wordBreak: 'break-all' }}>
+                  {new URL(applyLink).hostname}
+                </p>
               </>
-            )}
-            <p className="mt-4 flex gap-2 border-t border-line pt-4 text-xs leading-5 text-muted">
-              <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0 text-marigold-700" />
-              দৈনিক চাকরি আবেদন গ্রহণ করে না। আবেদনের আগে মূল বিজ্ঞপ্তির যোগ্যতা, ফি ও শর্ত মিলিয়ে নিন।
-            </p>
-            {(job.published_at || job.updated_at) && (
-              <p className="mt-3 text-xs text-muted">
-                {job.published_at && <>সাইটে প্রকাশ: {formatDateBn(job.published_at)}</>}
-                {job.updated_at && job.updated_at !== job.published_at && <><br />সর্বশেষ হালনাগাদ: {formatDateBn(job.updated_at)}</>}
+            ) : (
+              <p style={{ fontSize: '13px', color: 'var(--ink)', margin: '12px 0', lineHeight: 1.7 }}>
+                অনলাইন আবেদনের লিংক দেওয়া নেই। মূল বিজ্ঞপ্তির নির্দেশনা অনুযায়ী আবেদন করুন।
               </p>
             )}
+
+            {images.length > 0 && (
+              <a className="secondary-action" href="#circular">
+                মূল বিজ্ঞপ্তি পড়ুন ↓
+              </a>
+            )}
+
+            <p style={{ fontSize: '11px', marginTop: '16px', color: 'var(--muted)', lineHeight: 1.6, borderTop: '1px solid var(--line)', paddingTop: '12px' }}>
+              দৈনিক চাকরি আবেদন গ্রহণ করে না। আবেদনের আগে মূল বিজ্ঞপ্তির যোগ্যতা, ফি ও শর্ত মিলিয়ে নিন।
+            </p>
           </section>
+
+          <section className="detail-note">
+            <h3>একটু যাচাই, নিশ্চিন্ত সিদ্ধান্ত।</h3>
+            <p>
+              আবেদন কেবল নিয়োগকারীর নির্ধারিত মাধ্যমে করুন। কোনো ব্যক্তিকে চাকরির নিশ্চয়তার বিনিময়ে টাকা দেবেন না। মূল বিজ্ঞপ্তির শর্তই চূড়ান্ত।
+            </p>
+            <Link href="/sources">আমাদের তথ্যের উৎস →</Link>
+          </section>
+
+          {job.category && (
+            <Link className="back-link" href={`/category/${job.category.slug}`}>
+              ← {job.category.name}-এর সব বিজ্ঞপ্তি
+            </Link>
+          )}
         </aside>
       </div>
 
       {related.length > 0 && job.category && (
-        <section aria-labelledby="related-heading" className="container-page pt-12">
-          <div className="flex items-end justify-between gap-4">
-            <h2 id="related-heading" className="font-serif text-xl font-bold text-ink">{job.category.name}: আরও বিজ্ঞপ্তি</h2>
-            <Link href={`/category/${job.category.slug}`} className="text-sm font-bold text-brand-700 hover:underline">সব দেখুন →</Link>
+        <section className="related-block" aria-labelledby="related-heading">
+          <div className="related-title">
+            <h2 id="related-heading">{job.category.name}: আরও বিজ্ঞপ্তি</h2>
+            <Link href={`/category/${job.category.slug}`}>সব দেখুন →</Link>
           </div>
-          <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="related-jobs">
             {related.map((r) => (
-              <li key={r.id} className="card p-4">
-                <Link href={jobPath(r)} className="font-semibold leading-6 text-ink hover:text-brand-700">{r.title}</Link>
-                <div className="mt-2"><DeadlineBadge deadline={r.deadline} /></div>
-              </li>
+              <Link key={r.id} className="related-job" href={jobPath(r)}>
+                <small>{r.organization_name || job.category?.name}</small>
+                <h3>{r.title}</h3>
+                <span>{r.deadline ? `আবেদন শেষ ${formatDateBn(r.deadline)}` : 'বিজ্ঞপ্তি দেখুন'} →</span>
+              </Link>
             ))}
-          </ul>
+          </div>
         </section>
       )}
     </article>
