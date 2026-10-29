@@ -11,6 +11,7 @@ interface HomeCategoriesProps {
   categories: JobCategory[];
   totalJobs: number;
   categoryCounts: number[];
+  selectedCategory?: string;
 }
 
 function getCategoryIcon(slug: string): HomeIconName {
@@ -25,6 +26,7 @@ export default function HomeCategories({
   categories,
   totalJobs,
   categoryCounts,
+  selectedCategory,
 }: HomeCategoriesProps) {
   const [isOpen, setIsOpen] = useState(true);
 
@@ -51,15 +53,25 @@ export default function HomeCategories({
         <HomeIcon name="chevron" className="chevron" />
       </summary>
       <div className="home-category-list">
-        <Link href="/#jobs-heading" className="home-category active">
+        <Link
+          href="/"
+          scroll={false}
+          className={`home-category ${!selectedCategory ? 'active' : ''}`}
+        >
           <HomeIcon name="grid" />
           <span>সকল চাকরি</span>
           <span className="count">{toBnNumber(totalJobs)}</span>
         </Link>
         {categories.map((c, i) => {
           const count = categoryCounts[i];
+          const isSelected = selectedCategory === c.slug;
           return (
-            <Link key={c.slug} href={`/category/${c.slug}`} className="home-category">
+            <Link
+              key={c.slug}
+              href={`/category/${c.slug}`}
+              scroll={false}
+              className={`home-category ${isSelected ? 'active' : ''}`}
+            >
               <HomeIcon name={getCategoryIcon(c.slug)} />
               <span>{c.name}</span>
               <span className="count">{count !== undefined ? toBnNumber(count) : '—'}</span>

@@ -13,8 +13,7 @@ export default function Footer({ categories = [] }: { categories?: JobCategory[]
         <div className="footer-promise">
           <span className="footer-kicker">আপনার পরের সুযোগের ঠিকানা</span>
           <p>
-            সঠিক তথ্য থেকে<br />
-            <strong>সঠিক সিদ্ধান্ত।</strong>
+            সঠিক তথ্য থেকে <strong>সঠিক সিদ্ধান্ত।</strong>
           </p>
           <div className="footer-process">
             <span>০১ <b>চাকরি খুঁজুন</b></span>
@@ -29,13 +28,13 @@ export default function Footer({ categories = [] }: { categories?: JobCategory[]
               <Image
                 src="/brand/dainik-chakri-logo.png"
                 alt="দৈনিক চাকরি"
-                width={112}
-                height={68}
-                style={{ width: '112px', height: 'auto', display: 'block' }}
+                width={98}
+                height={60}
+                style={{ width: '92px', height: 'auto', display: 'block' }}
               />
             </Link>
             <p>
-              চাকরির খবর, নিয়োগের পরের আপডেট ও প্রস্তুতি—একটি গোছানো ঠিকানায়। মূল সূত্রের তথ্য সহজভাবে আপনার কাছে পৌঁছে দেওয়াই আমাদের লক্ষ্য।
+              চাকরির বিজ্ঞপ্তি ও প্রস্তুতি—একটি ঠিকানায়। মূল সূত্রের তথ্য নির্ভরযোগ্যভাবে পৌঁছে দেওয়াই আমাদের লক্ষ্য।
             </p>
             <a className="footer-mail" href={`mailto:${SITE.email}`}>
               {SITE.email} ↗
@@ -44,7 +43,7 @@ export default function Footer({ categories = [] }: { categories?: JobCategory[]
 
           <nav aria-label="চাকরির বিভাগ">
             <h3>সুযোগ খুঁজুন</h3>
-            <Link href="/#jobs-heading">সকল চাকরি</Link>
+            <Link href="/">সকল চাকরি</Link>
             {categories.map((c) => (
               <Link key={c.slug} href={`/category/${c.slug}`}>
                 {c.name}
@@ -72,7 +71,7 @@ export default function Footer({ categories = [] }: { categories?: JobCategory[]
         <div className="footer-trust">
           <span className="trust-mark">i</span>
           <p>
-            দৈনিক চাকরি কোনো সরকারি প্রতিষ্ঠান বা নিয়োগকারী সংস্থা নয়। এখানে আবেদন গ্রহণ বা নিয়োগের নিশ্চয়তা দেওয়া হয় না। আবেদনের আগে মূল বিজ্ঞপ্তি ও নিয়োগকারীর নির্ধারিত মাধ্যম যাচাই করুন।
+            দৈনিক চাকরি কোনো সরকারি প্রতিষ্ঠান বা নিয়োগকারী সংস্থা নয়। এখানে আবেদন গ্রহণ করা হয় না। আবেদনের আগে মূল বিজ্ঞপ্তি ও অফিশিয়াল ওয়েবসাইট যাচাই করুন।
           </p>
           <Link href="/sources">
             আমাদের তথ্যের উৎস <span>↗</span>

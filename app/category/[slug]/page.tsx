@@ -1,12 +1,9 @@
 // File: app/category/[slug]/page.tsx
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import Breadcrumbs from '@/components/Breadcrumbs';
-import EmptyState from '@/components/EmptyState';
-import JobCard from '@/components/JobCard';
-import Pagination from '@/components/Pagination';
+import HomeView from '@/components/home/HomeView';
 import { getJobCategories, getJobs } from '@/lib/api';
-import { parsePage, toBnDigits, toBnNumber } from '@/lib/format';
+import { parsePage, toBnDigits } from '@/lib/format';
 import { pagedPath } from '@/lib/site';
 import { pageMetadata } from '@/lib/seo';
 import type { JobCategory } from '@/types/job';
@@ -14,7 +11,7 @@ import type { JobCategory } from '@/types/job';
 type Params = Promise<{ slug: string }>;
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
-const PER_PAGE = 20;
+const PER_PAGE = 12;
 
 /** Short reader-facing introductions for the categories that exist in the admin panel. */
 const INTROS: Record<string, string> = {
@@ -53,51 +50,26 @@ export default async function CategoryPage({ params, searchParams }: { params: P
   const { slug } = await params;
   const page = parsePage((await searchParams).page);
 
-  const category = await findCategory(slug);
+  const categories = await getJobCategories();
+  const category = categories.find((c) => c.slug === slug);
   if (!category) notFound();
 
-  const jobsRes = await getJobs({ category: category.slug, page, per_page: PER_PAGE });
+  const [jobsRes, allJobsRes, categoryCounts] = await Promise.all([
+    getJobs({ category: category.slug, page, per_page: PER_PAGE }),
+    getJobs({ page: 1, per_page: 1 }), // Site-wide total active jobs for sidebar
+    Promise.all(categories.map((c) => getJobs({ category: c.slug, per_page: 1 }).then((r) => r.meta.total))),
+  ]);
+
   if (page > 1 && page > jobsRes.meta.last_page) notFound();
 
-  const basePath = `/category/${category.slug}`;
-
   return (
-    <>
-      <section className="border-b border-line bg-surface">
-        <div className="container-page py-7 sm:py-9">
-          <Breadcrumbs items={[{ name: category.name, path: basePath }]} />
-          <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="font-serif text-[1.75rem] font-bold text-ink sm:text-4xl">
-                {category.name}
-                {page > 1 && <span className="ml-2 text-lg font-semibold text-muted">— পৃষ্ঠা {toBnDigits(page)}</span>}
-              </h1>
-              <p className="mt-2 max-w-2xl text-ink-soft">{INTROS[category.slug] ?? `${category.name} বিভাগের নিয়োগ বিজ্ঞপ্তি।`}</p>
-            </div>
-            <p className="rounded-xl bg-brand-50 px-4 py-2 text-sm text-brand-800">
-              সক্রিয় বিজ্ঞপ্তি <strong className="font-serif text-xl">{toBnNumber(jobsRes.meta.total)}</strong>টি
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <div className="container-page max-w-4xl pt-8">
-        {jobsRes.data.length > 0 ? (
-          <div className="space-y-3">
-            {jobsRes.data.map((job) => (
-              <JobCard key={job.id} job={job} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            icon="file"
-            title="এই বিভাগে এখন কোনো সক্রিয় বিজ্ঞপ্তি নেই"
-            body="নতুন বিজ্ঞপ্তি প্রকাশিত হলে এখানে দেখা যাবে। ততক্ষণ অন্য বিভাগের সর্বশেষ বিজ্ঞপ্তি দেখতে পারেন।"
-            action={{ href: '/', label: 'সর্বশেষ সব বিজ্ঞপ্তি' }}
-          />
-        )}
-        <Pagination currentPage={page} lastPage={jobsRes.meta.last_page} hrefFor={(p) => pagedPath(basePath, p)} />
-      </div>
-    </>
+    <HomeView
+      categories={categories}
+      totalJobs={allJobsRes.meta.total}
+      categoryCounts={categoryCounts}
+      jobsRes={jobsRes}
+      page={page}
+      selectedCategory={category}
+    />
   );
 }
