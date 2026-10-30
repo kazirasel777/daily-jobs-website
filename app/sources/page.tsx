@@ -136,8 +136,13 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
 
       {/* ডিরেক্টরি প্যানেল */}
       <div className="mt-3.5 rounded-2xl border border-line bg-surface p-3.5 sm:p-5 shadow-xs">
-        {/* সমন্বিত অনুসন্ধান ও ক্যাটাগরি ফিল্টার ফর্ম */}
-        <form method="GET" action="/sources" className="grid grid-cols-1 gap-2.5 sm:grid-cols-12 sm:items-end">
+        {/* সমন্বিত অনুসন্ধান ও ক্যাটাগরি ফিল্টার ফর্ম (key দিয়ে route change-এ sync রাখা হয়েছে) */}
+        <form
+          key={`${selectedCategory ?? 'all'}-${query ?? ''}`}
+          method="GET"
+          action="/sources"
+          className="grid grid-cols-1 gap-2.5 sm:grid-cols-12 sm:items-end"
+        >
           <div className="sm:col-span-6">
             <label htmlFor="source-search-input" className="block text-xs font-bold text-ink-soft mb-1">
               উৎসের নাম অনুসন্ধান
