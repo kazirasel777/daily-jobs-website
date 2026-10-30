@@ -6,13 +6,13 @@ import EmptyState from '@/components/EmptyState';
 import Icon from '@/components/Icon';
 import Pagination from '@/components/Pagination';
 import { getJobCategories, getJobSources } from '@/lib/api';
-import { parsePage, toBnDigits, toBnNumber, formatDateBn } from '@/lib/format';
+import { parsePage, toBnDigits } from '@/lib/format';
 import { pageMetadata } from '@/lib/seo';
 import { pagedPath } from '@/lib/site';
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
-const PER_PAGE = 24;
+const PER_PAGE = 30;
 
 export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
   const sp = await searchParams;
@@ -112,16 +112,10 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
       </header>
 
       {/* সরকারি তথ্য বিষয়ক স্বচ্ছতা ও স্বাতন্ত্র্য ঘোষণা */}
-      <section aria-label="সরকারি তথ্যের স্বচ্ছতা ঘোষণা" className="mt-5 rounded-2xl border border-line-strong bg-brand-50/50 p-4 sm:p-5">
-        <div className="flex items-start gap-3">
-          <Icon name="alert" className="mt-0.5 h-5 w-5 shrink-0 text-brand-800" />
-          <div className="space-y-1">
-            <h2 className="text-sm font-bold text-brand-950">স্বচ্ছতা ও স্বাধীনতা বিষয়ক ঘোষণা</h2>
-            <p className="text-xs leading-5 text-ink-soft">
-              দৈনিক চাকরি (DailyJobs.bd) কোনো সরকারি প্রতিষ্ঠান বা রাজনৈতিক দলের প্রতিনিধিত্ব করে না এবং সরকারের সাথে আমাদের কোনো আনুষ্ঠানিক বা চুক্তিভিত্তিক সংযুক্তি নেই। চাকরিপ্রার্থীদের সুবিধার্থে বাংলাদেশ সরকারের উন্মুক্ত জাতীয় ওয়েব পোর্টালসমূহ, স্বনামধন্য দৈনিক পত্রিকা ও অফিশিয়াল সার্কুলার বোর্ড থেকে তথ্য সংগ্রহ করে পাঠযোগ্যভাবে প্রকাশ করা হয়। যেকোনো পদের আবেদন করার পূর্বে অবশ্যই মূল বিজ্ঞপ্তি ও সংশ্লিষ্ট প্রতিষ্ঠানের ওয়েবসাইট যাচাই করার পরামর্শ দেওয়া হলো।
-            </p>
-          </div>
-        </div>
+      <section aria-label="সরকারি তথ্যের স্বচ্ছতা ঘোষণা" className="mt-4 rounded-xl border border-line bg-brand-50/40 p-4 text-xs leading-relaxed text-ink-soft">
+        <p>
+          <strong className="font-semibold text-ink">স্বচ্ছতা ও স্বাতন্ত্র্য ঘোষণা:</strong> দৈনিক চাকরি (DailyJobs.bd) কোনো সরকারি প্রতিষ্ঠান বা রাজনৈতিক দলের প্রতিনিধিত্ব করে না এবং সরকারের সাথে কোনো আনুষ্ঠানিক বা চুক্তিভিত্তিক সংযুক্তি নেই। চাকরিপ্রার্থীদের সুবিধার্থে উন্মুক্ত সরকারি পোর্টাল, অফিসিয়াল সার্কুলার বোর্ড ও স্বনামধন্য দৈনিক পত্রিকা থেকে তথ্য সংগ্রহ করে মূল উৎসের বিবরণসহ উপস্থাপন করা হয়। যেকোনো পদে আবেদনের পূর্বে সংশ্লিষ্ট প্রতিষ্ঠানের মূল বিজ্ঞপ্তি যাচাই করার পরামর্শ দেওয়া হলো।
+        </p>
       </section>
 
       {/* ক্যাটাগরি ফিল্টার */}
@@ -163,7 +157,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
           ))}
       </nav>
 
-      {/* সোর্স কার্ড গ্রিড */}
+      {/* সোর্স তালিকা (কমপ্যাক্ট ভিউ) */}
       {sourcesRes === null ? (
         <div className="mt-10 rounded-2xl border border-line bg-surface p-8 text-center">
           <p className="text-sm text-ink-soft">উৎস তালিকা লোড হতে সমস্যা হয়েছে। অনুগ্রহ করে কিছু সময় পর আবার চেষ্টা করুন।</p>
@@ -181,86 +175,110 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
         </div>
       ) : (
         <>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {sources.map((item) => {
-              const badge = roleBadge(item.source_role);
-              return (
-                <article
-                  key={item.source_name}
-                  className="card flex flex-col justify-between p-5 transition-shadow hover:shadow-md"
-                >
-                  <div>
+          <div className="mt-6 overflow-hidden rounded-xl border border-line bg-surface shadow-xs">
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-line bg-stone-50/70 text-xs font-semibold text-muted">
+                  <tr>
+                    <th scope="col" className="w-12 py-3 pl-4 pr-2 text-center">#</th>
+                    <th scope="col" className="py-3 px-4">উৎসের নাম</th>
+                    <th scope="col" className="w-44 py-3 px-4">ধরন / ভূমিকা</th>
+                    <th scope="col" className="w-72 py-3 pl-4 pr-6">উৎসের লিংক</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line/70">
+                  {sources.map((item, index) => {
+                    const badge = roleBadge(item.source_role);
+                    const rowNum = (meta.current_page - 1) * PER_PAGE + index + 1;
+                    return (
+                      <tr key={`${item.source_name}-${rowNum}`} className="transition-colors hover:bg-brand-50/20">
+                        <td className="py-3 pl-4 pr-2 text-center text-xs font-medium text-muted">
+                          {toBnDigits(rowNum)}
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-ink">
+                          <div className="flex items-center gap-2">
+                            <span>{item.source_name}</span>
+                            {item.is_verified && (
+                              <span className="inline-flex items-center rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-bold text-emerald-700">
+                                ✓ যাচাইকৃত
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium ${badge.bg} ${badge.text}`}>
+                            {badge.label}
+                          </span>
+                        </td>
+                        <td className="py-3 pl-4 pr-6 text-xs">
+                          {item.source_url ? (
+                            <a
+                              href={item.source_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 font-semibold text-brand-700 hover:text-brand-900 hover:underline"
+                            >
+                              <span>{sourceLinkLabel(item.source_role, item.source_type)}</span>
+                              <Icon name="external" className="h-3 w-3 shrink-0" />
+                            </a>
+                          ) : (
+                            <span className="text-muted">
+                              {sourceFallbackLabel(item.source_type, item.source_role)}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Compact List View */}
+            <ul className="divide-y divide-line/70 md:hidden">
+              {sources.map((item, index) => {
+                const badge = roleBadge(item.source_role);
+                const rowNum = (meta.current_page - 1) * PER_PAGE + index + 1;
+                return (
+                  <li key={`${item.source_name}-${rowNum}`} className="p-3.5 transition-colors hover:bg-brand-50/20">
                     <div className="flex items-start justify-between gap-2">
-                      <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${badge.bg} ${badge.text}`}>
+                      <div className="flex items-start gap-2 min-w-0">
+                        <span className="text-xs font-medium text-muted shrink-0 pt-0.5">{toBnDigits(rowNum)}.</span>
+                        <div className="min-w-0">
+                          <span className="text-sm font-bold text-ink break-words leading-snug">{item.source_name}</span>
+                          {item.is_verified && (
+                            <span className="ml-1.5 inline-block rounded bg-emerald-50 px-1 py-0.2 text-[10px] font-bold text-emerald-700 align-middle">
+                              ✓
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium self-start ${badge.bg} ${badge.text}`}>
                         {badge.label}
                       </span>
-                      {item.is_verified && (
-                        <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-bold text-emerald-700">
-                          ✓ যাচাইকৃত
-                        </span>
-                      )}
                     </div>
-
-                    <h2 className="mt-3 font-serif text-base font-bold text-ink">
-                      {item.source_name}
-                    </h2>
-
-                    {item.source_url ? (
-                      <div className="mt-2">
+                    <div className="mt-1.5 pl-5 text-xs">
+                      {item.source_url ? (
                         <a
                           href={item.source_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 break-all text-xs font-medium text-brand-700 hover:underline"
+                          className="inline-flex items-center gap-1 font-medium text-brand-700 hover:underline break-all"
                         >
-                          {sourceLinkLabel(item.source_role, item.source_type)}
+                          <span>{sourceLinkLabel(item.source_role, item.source_type)}</span>
                           <Icon name="external" className="h-3 w-3 shrink-0" />
                         </a>
-                      </div>
-                    ) : (
-                      <p className="mt-2 text-xs text-muted">
-                        {sourceFallbackLabel(item.source_type, item.source_role)}
-                      </p>
-                    )}
-
-                    {item.categories.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1">
-                        {item.categories.map((c) => (
-                          <span key={c.slug} className="rounded bg-stone-100 px-1.5 py-0.5 text-[11px] text-stone-600">
-                            {c.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-4 border-t border-line/60 pt-3">
-                    <div className="flex items-center justify-between text-xs text-muted">
-                      <span>মোট বিজ্ঞপ্তি: <strong className="font-semibold text-ink">{toBnNumber(item.job_count)}টি</strong></span>
-                      {item.latest_date && <span>সর্বশেষ: {formatDateBn(item.latest_date)}</span>}
+                      ) : (
+                        <span className="text-muted">
+                          {sourceFallbackLabel(item.source_type, item.source_role)}
+                        </span>
+                      )}
                     </div>
-
-                    {item.recent_jobs && item.recent_jobs.length > 0 && (
-                      <div className="mt-3 space-y-1.5">
-                        <p className="text-[11px] font-semibold text-muted">সাম্প্রতিক প্রকাশিত বিজ্ঞপ্তি:</p>
-                        <ul className="space-y-1 text-xs">
-                          {item.recent_jobs.map((job) => (
-                            <li key={job.id} className="truncate">
-                              <Link
-                                href={`/job/${job.slug}`}
-                                className="text-brand-800 hover:text-brand-600 hover:underline"
-                              >
-                                • {job.title}
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
 
           <Pagination
