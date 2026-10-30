@@ -239,7 +239,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
               </span>
               {query && (
                 <span>
-                  অনুসন্ধান: <strong className="text-ink">"{query}"</strong>
+                  অনুসন্ধান: <strong className="text-ink">&ldquo;{query}&rdquo;</strong>
                 </span>
               )}
             </div>
@@ -359,7 +359,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
 
             {/* তারিখ সংক্রান্ত স্বচ্ছতা ফুটনোট */}
             <p className="mt-3 text-xs text-muted leading-relaxed">
-              * নোট: "সর্বশেষ নথিভুক্ত" হলো সংশ্লিষ্ট বিজ্ঞপ্তি বা সোর্সের সিস্টেমে প্রাপ্ত সর্বশেষ প্রকাশের তথ্য; এটি সব ক্ষেত্রে পত্রিকার নির্দিষ্ট দিনের ইস্যু তারিখের নিশ্চয়তা নির্দেশ করে না।
+              * নোট: &ldquo;সর্বশেষ নথিভুক্ত&rdquo; হলো সংশ্লিষ্ট বিজ্ঞপ্তি বা সোর্সের সিস্টেমে প্রাপ্ত সর্বশেষ প্রকাশের তথ্য; এটি সব ক্ষেত্রে পত্রিকার নির্দিষ্ট দিনের ইস্যু তারিখের নিশ্চয়তা নির্দেশ করে না।
             </p>
           </div>
         )}
