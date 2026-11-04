@@ -1,8 +1,12 @@
 // File: components/JobSourceList.tsx
-// একটি চাকরির উৎস, এক লাইনে:
-//   উৎস: দৈনিক প্রথম আলো · ২ নভেম্বর ২০২৬ · পৃষ্ঠা ১১        [মূল বিজ্ঞপ্তি দেখুন]
-//   উৎস: অফিশিয়াল ওয়েবসাইট (rajbari.gov.bd) · ৩ নভেম্বর ২০২৬  [মূল বিজ্ঞপ্তি দেখুন]
-// নামে চাপলে পত্রিকা/ই-পেপার বা অফিশিয়াল সাইট খোলে; বাটন শুধু বিজ্ঞপ্তির নিজস্ব পেজ/PDF থাকলে।
+// একটি চাকরির উৎস, মালিকের নির্ধারিত ক্রমে:
+//   পত্রিকায় প্রকাশিত হলে:
+//     পত্রিকা: দৈনিক প্রথম আলো · ৩ নভেম্বর ২০২৬ · পৃষ্ঠা ১১ · ই-পেপার দেখুন
+//     অফিসিয়াল ওয়েবসাইট: rajbari.gov.bd
+//     [মূল বিজ্ঞপ্তি দেখুন]
+//   শুধু অফিসিয়াল ওয়েবসাইটে পেলে:
+//     অফিসিয়াল ওয়েবসাইট: জেলা প্রশাসকের কার্যালয় (rajbari.gov.bd) · ৩ নভেম্বর ২০২৬
+//     [মূল বিজ্ঞপ্তি দেখুন]
 // জব পেজ ও /sources দুই জায়গায় একই।
 import Icon from '@/components/Icon';
 import { formatDateBn, isHttpUrl, toBnDigits } from '@/lib/format';
@@ -23,58 +27,98 @@ function domain(url: string | null | undefined): string | null {
   }
 }
 
-function sourceLabel(src: PublicJobSource, nameUrl: string | null): string {
-  if (src.source_type === 'website' || src.source_type === 'official_notice') {
-    const host = domain(nameUrl ?? src.source_url);
-    return host ? `অফিশিয়াল ওয়েবসাইট (${host})` : `অফিশিয়াল ওয়েবসাইট: ${src.source_name}`;
-  }
-  if (src.source_type === 'epaper' && !src.source_name.includes('ই-পেপার')) return `${src.source_name} (ই-পেপার)`;
-  return src.source_name;
+function url(v: string | null | undefined): string | null {
+  return isHttpUrl(v) ? v : null;
 }
+
+const isPrint = (t: string) => t === 'newspaper' || t === 'epaper';
 
 /** "যেখানে খবর পেয়েছি" (discovery) মূল উৎস নয় — অ্যাপের মতোই বাদ। */
 export function visibleSources(sources: PublicJobSource[] | undefined): PublicJobSource[] {
   return (sources ?? []).filter((src) => src.source_role !== 'discovery_source');
 }
 
+const linkCls = 'font-semibold text-brand-800 underline-offset-2 hover:underline break-words';
+
+function Ext({ href, children, className = linkCls }: { href: string; children: React.ReactNode; className?: string }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
+      {children}
+    </a>
+  );
+}
+
 export default function JobSourceList({ sources }: { sources: PublicJobSource[] }) {
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-3">
       {sources.map((src) => {
         // পুরোনো API-তে name_url নেই — তখন source_url
-        const rawName = src.name_url === undefined ? src.source_url : src.name_url;
-        const nameUrl = isHttpUrl(rawName) ? rawName : null;
-        const rawNotice = src.notice_url ?? (src.link_kind === 'notice' ? src.button_url : null);
-        const noticeUrl = isHttpUrl(rawNotice) ? rawNotice : null;
-        const label = sourceLabel(src, nameUrl);
-        const page = pageText(src.printed_page);
+        const nameUrl = url(src.name_url === undefined ? src.source_url : src.name_url);
+        const noticeUrl = url(src.notice_url ?? (src.link_kind === 'notice' ? src.button_url : null));
+        const date = src.publication_date ? formatDateBn(src.publication_date) : null;
+        const verified = src.is_verified && (
+          <span className="ml-1 text-xs text-brand-700" title="মূল বিজ্ঞপ্তির সাথে মিলিয়ে দেখা হয়েছে">
+            ✓ যাচাইকৃত
+          </span>
+        );
+
+        let lines: React.ReactNode;
+        if (isPrint(src.source_type)) {
+          const page = pageText(src.printed_page);
+          const site = url(src.website_url);
+          lines = (
+            <>
+              <p>
+                <span className="text-muted">পত্রিকা: </span>
+                <span className="font-semibold text-ink break-words">{src.source_name}</span>
+                {verified}
+                {date && <span className="text-muted"> · {date}</span>}
+                {page && <span className="text-muted"> · {page}</span>}
+                {nameUrl && (
+                  <>
+                    <span className="text-muted"> · </span>
+                    <Ext href={nameUrl}>ই-পেপার দেখুন</Ext>
+                  </>
+                )}
+              </p>
+              {site && (
+                <p>
+                  <span className="text-muted">অফিসিয়াল ওয়েবসাইট: </span>
+                  <Ext href={site}>{domain(site) ?? site}</Ext>
+                </p>
+              )}
+            </>
+          );
+        } else {
+          const host = domain(nameUrl);
+          lines = (
+            <p>
+              <span className="text-muted">অফিসিয়াল ওয়েবসাইট: </span>
+              {nameUrl ? (
+                <Ext href={nameUrl}>
+                  {src.source_name}
+                  {host && ` (${host})`}
+                </Ext>
+              ) : (
+                <span className="font-semibold text-ink break-words">{src.source_name}</span>
+              )}
+              {verified}
+              {date && <span className="text-muted"> · {date}</span>}
+            </p>
+          );
+        }
 
         return (
-          <li key={src.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-            <p className="min-w-0 text-sm text-ink-soft">
-              <span className="text-muted">উৎস: </span>
-              {nameUrl ? (
-                <a href={nameUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-800 underline-offset-2 hover:underline break-words">
-                  {label}
-                </a>
-              ) : (
-                <span className="font-semibold text-ink break-words">{label}</span>
-              )}
-              {src.is_verified && <span className="ml-1 text-xs text-brand-700" title="মূল বিজ্ঞপ্তির সাথে মিলিয়ে দেখা হয়েছে">✓</span>}
-              {src.publication_date && <span className="text-muted"> · {formatDateBn(src.publication_date)}</span>}
-              {page && <span className="text-muted"> · {page}</span>}
-            </p>
-
+          <li key={src.id} className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2 text-sm text-ink-soft">
+            <div className="min-w-0 space-y-0.5">{lines}</div>
             {noticeUrl && (
-              <a
+              <Ext
                 href={noticeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-brand-600/40 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800 hover:border-brand-600"
               >
                 মূল বিজ্ঞপ্তি দেখুন
                 <Icon name="external" className="h-3 w-3" />
-              </a>
+              </Ext>
             )}
           </li>
         );
