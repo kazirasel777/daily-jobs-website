@@ -8,7 +8,7 @@ import Pagination from '@/components/Pagination';
 import { getJobCategories, getJobSources } from '@/lib/api';
 import { parsePage, toBnDigits, toBnNumber, formatDateBn } from '@/lib/format';
 import { pageMetadata } from '@/lib/seo';
-import { pagedPath } from '@/lib/site';
+import { jobPath, pagedPath } from '@/lib/site';
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
@@ -24,7 +24,7 @@ export async function generateMetadata({ searchParams }: { searchParams: SearchP
 
   return pageMetadata({
     title: `তথ্যের উৎস ও প্রকাশনা ডিরেক্টরি${catSuffix}${pageSuffix}`,
-    description: 'দৈনিক চাকরিতে প্রকাশিত সরকারি ও অন্যান্য নিয়োগ বিজ্ঞপ্তির মূল উৎস, অফিশিয়াল সরকারি পোর্টাল ও পত্রিকার তালিকা।',
+    description: 'দৈনিক চাকরিতে প্রকাশিত নিয়োগ বিজ্ঞপ্তির যাচাইকৃত মূল উৎস: নিয়োগকারী প্রতিষ্ঠানের বিজ্ঞপ্তি পেজ, ওয়েবসাইট ও সংবাদপত্র। দৈনিক চাকরি কোনো সরকারি সংস্থা নয়।',
     path: pagedPath('/sources', page),
   });
 }
@@ -49,6 +49,8 @@ function sourceTypeBadge(type: string): { label: string; icon: IconName; bg: str
       return { label: 'অফিসিয়াল নোটিশ', icon: 'building', bg: 'bg-emerald-50', text: 'text-emerald-900', border: 'border-emerald-200' };
     case 'website':
       return { label: 'ওয়েবসাইট', icon: 'spark', bg: 'bg-blue-50', text: 'text-blue-900', border: 'border-blue-200' };
+    case 'saved_image':
+      return { label: 'সংরক্ষিত বিজ্ঞপ্তি', icon: 'file', bg: 'bg-stone-100', text: 'text-stone-800', border: 'border-stone-200' };
     case 'social':
       return { label: 'সোশ্যাল মিডিয়া', icon: 'users', bg: 'bg-purple-50', text: 'text-purple-900', border: 'border-purple-200' };
     default:
@@ -123,7 +125,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
           )}
         </div>
         <p className="mt-1 text-xs sm:text-sm text-muted">
-          বিজ্ঞপ্তি, পত্রিকা ও ওয়েবসাইটের সরাসরি তথ্যসূত্র।
+          যেখানে বিজ্ঞপ্তিগুলো আসলে প্রকাশিত হয়েছে: নিয়োগকারী প্রতিষ্ঠানের বিজ্ঞপ্তি পেজ/ওয়েবসাইট ও সংবাদপত্র। শুধু যাচাই করা উৎস এখানে দেখানো হয়।
         </p>
       </header>
 
@@ -221,7 +223,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
               body={
                 query
                   ? `"${query}" অনুসন্ধানের সাথে এই বিভাগে কোনো উৎস মেলেনি। ফিল্টার রিসেট করে পুনরায় চেষ্টা করুন।`
-                  : 'এই ক্যাটাগরিতে বর্তমানে কোনো অনুমোদিত পাবলিক সোর্স তালিকাভুক্ত নেই।'
+                  : 'এই বিভাগে এখনো কোনো যাচাইকৃত উৎস তালিকাভুক্ত নেই।'
               }
               action={{ href: '/sources', label: 'সব উৎস দেখুন' }}
             />
@@ -339,12 +341,20 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
                                 <span className="text-stone-300" aria-hidden="true">|</span>
                               </>
                             )}
-                            <span className="shrink-0">উৎস খুলুন</span>
+                            <span className="shrink-0">{item.source_type === 'newspaper' || item.source_type === 'epaper' ? 'প্রকাশনার উৎস দেখুন' : 'উৎস দেখুন'}</span>
                             <Icon
                               name="external"
                               className="h-3 w-3 shrink-0 text-brand-600 group-hover:translate-x-0.5 transition-transform"
                             />
                           </a>
+                        ) : item.recent_jobs[0] ? (
+                          // অনলাইন লিংক নেই (সংবাদপত্র/সংরক্ষিত ছবি): সংশ্লিষ্ট চাকরির পাতায় উৎসের বিবরণ ও বিজ্ঞপ্তির ছবি
+                          <Link
+                            href={jobPath(item.recent_jobs[0])}
+                            className="inline-flex items-center rounded-xl border border-line bg-paper/60 px-3 py-1.5 text-xs font-semibold text-brand-800 hover:border-brand-600 hover:bg-brand-50"
+                          >
+                            সংরক্ষিত বিজ্ঞপ্তি দেখুন
+                          </Link>
                         ) : (
                           <span className="inline-flex items-center rounded-xl border border-line/70 bg-stone-50 px-2.5 py-1 text-xs text-muted">
                             অনলাইন লিংক নেই

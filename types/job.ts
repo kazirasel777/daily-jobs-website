@@ -47,6 +47,11 @@ export interface PublicJobSource {
   publication_date: string | null;
   printed_page: string | null;
   is_verified: boolean;
+  /** API থেকে আসা একটাই বাটন — ওয়েবসাইট ও অ্যাপে একই। পুরোনো API-তে থাকে না। */
+  link_kind?: 'notice' | 'publication' | 'saved_image' | 'none';
+  button_label?: string | null;
+  button_url?: string | null;
+  source_type_label?: string | null;
 }
 
 export interface DirectorySourceItem {

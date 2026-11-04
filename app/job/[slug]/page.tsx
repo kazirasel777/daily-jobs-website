@@ -84,6 +84,8 @@ export default async function JobDetailPage({ params }: { params: Params }) {
   const method = applicationMethodLabel(job.application_method);
   const images = (job.circular_images ?? []).filter((img): img is { page_number: number; url: string } => Boolean(img.url));
   const schema = expired ? null : jobPostingSchema(job);
+  // অ্যাপের মতোই: "যেখানে খবর পেয়েছি" (discovery) মূল উৎস হিসেবে দেখানো হয় না
+  const sources = (job.sources ?? []).filter((src) => src.source_role !== 'discovery_source');
 
   const related = job.category
     ? (await getJobs({ category: job.category.slug, per_page: 6 }).catch(() => null))?.data.filter((j) => j.id !== job.id).slice(0, 4) ?? []
@@ -168,7 +170,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
               <a href="#overview">বিস্তারিত</a>
               {job.application_instructions && <a href="#application">আবেদনের নিয়ম</a>}
               {images.length > 0 && <a href="#circular">মূল বিজ্ঞপ্তি</a>}
-              {job.sources && job.sources.length > 0 && <a href="#sources">তথ্যের উৎস</a>}
+              {sources.length > 0 && <a href="#sources">তথ্যের উৎস</a>}
             </nav>
           </header>
 
@@ -243,31 +245,24 @@ export default async function JobDetailPage({ params }: { params: Params }) {
             </section>
           )}
 
-          {job.sources && job.sources.length > 0 && (
+          {sources.length > 0 && (
             <section className="detail-section" id="sources">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
                 <h2>
-                  <span className="section-number">{images.length > 0 ? (job.application_instructions ? '০৪' : '০৩') : (job.application_instructions ? '০৩' : '০২')}</span> তথ্যের উৎস ও প্রকাশনা
+                  <span className="section-number">{images.length > 0 ? (job.application_instructions ? '০৪' : '০৩') : (job.application_instructions ? '০৩' : '০২')}</span> তথ্যের উৎস
                 </h2>
                 <Link href="/sources" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--green)' }}>
-                  সকল উৎস ডিরেক্টরি →
+                  সকল উৎসের তালিকা →
                 </Link>
               </div>
 
-              <p style={{ marginTop: '12px', fontSize: '13px', lineHeight: 1.8, color: 'var(--muted)' }}>
-                দৈনিক চাকরি কোনো সরকারি প্রতিষ্ঠানের প্রতিনিধিত্ব করে না। প্রকাশের স্বচ্ছতার স্বার্থে মূল বিজ্ঞপ্তি ও প্রচারের উৎস নিচে উল্লেখ করা হলো:
-              </p>
-
+              {/* API যা পাঠায় হুবহু তা-ই: প্রকাশক, তারিখ, পৃষ্ঠা আর একটি বাটন (অ্যাপেও একই) */}
               <ul className="mt-4 divide-y divide-line/60">
-                {job.sources.map((src) => {
-                  const roleLabel =
-                    src.source_role === 'original_notice'
-                      ? 'মূল বিজ্ঞপ্তি / গেজেট'
-                      : src.source_role === 'issuing_authority'
-                      ? 'নিয়োগকারী প্রতিষ্ঠান'
-                      : src.source_role === 'discovery_source'
-                      ? 'পত্রিকা / প্রচার মাধ্যম'
-                      : 'তথ্যসূত্র';
+                {sources.map((src) => {
+                  const page = src.printed_page
+                    ? (src.printed_page.trim().startsWith('পৃষ্ঠা') ? toBnDigits(src.printed_page) : `পৃষ্ঠা ${toBnDigits(src.printed_page)}`)
+                    : null;
+                  const buttonUrl = src.button_label && isHttpUrl(src.button_url) ? src.button_url : null;
 
                   return (
                     <li key={src.id} className="py-3 first:pt-0 last:pb-0">
@@ -282,20 +277,20 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                             )}
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-                            <span className="rounded bg-stone-100 px-1.5 py-0.5 text-stone-700">{roleLabel}</span>
                             {src.publication_date && <span>প্রকাশ: {formatDateBn(src.publication_date)}</span>}
-                            {src.printed_page && <span>{src.printed_page}</span>}
+                            {page && <span>{page}</span>}
+                            {!buttonUrl && <span>অনলাইন লিংক নেই</span>}
                           </div>
                         </div>
 
-                        {src.source_url && (
+                        {buttonUrl && (
                           <a
-                            href={src.source_url}
+                            href={buttonUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline"
+                            className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1 text-xs font-semibold text-brand-700 hover:border-brand-600 hover:underline"
                           >
-                            মূল উৎস লিংক
+                            {src.button_label}
                             <Icon name="external" className="h-3 w-3" />
                           </a>
                         )}
@@ -304,6 +299,10 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                   );
                 })}
               </ul>
+
+              <p style={{ marginTop: '12px', fontSize: '12px', lineHeight: 1.7, color: 'var(--muted)' }}>
+                দৈনিক চাকরি কোনো সরকারি প্রতিষ্ঠানের প্রতিনিধিত্ব করে না। আবেদনের আগে মূল বিজ্ঞপ্তি মিলিয়ে নিন।
+              </p>
             </section>
           )}
         </div>
