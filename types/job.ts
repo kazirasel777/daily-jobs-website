@@ -47,8 +47,12 @@ export interface PublicJobSource {
   publication_date: string | null;
   printed_page: string | null;
   is_verified: boolean;
-  /** API থেকে আসা একটাই বাটন — ওয়েবসাইট ও অ্যাপে একই। পুরোনো API-তে থাকে না। */
-  link_kind?: 'notice' | 'publication' | 'saved_image' | 'none';
+  /** উৎসের নামে চাপলে যা খোলে (পত্রিকা/ই-পেপার বা অফিশিয়াল সাইট); আবেদনের লিংক কখনো নয়। */
+  name_url?: string | null;
+  /** মূল বিজ্ঞপ্তির নিজস্ব পেজ/PDF — "মূল বিজ্ঞপ্তি দেখুন"। */
+  notice_url?: string | null;
+  /** পুরোনো ক্লায়েন্টের জন্য একই তথ্য বাটন আকারে। */
+  link_kind?: 'notice' | 'none' | string;
   button_label?: string | null;
   button_url?: string | null;
   source_type_label?: string | null;
