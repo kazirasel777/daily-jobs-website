@@ -85,7 +85,7 @@ function NoticeRow({ notice }: { notice: PublicNotice }) {
       <div className="mt-2.5 flex flex-wrap gap-2 text-xs font-bold">
         {sourceUrl && (
           <a href={sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex items-center gap-1 rounded-full bg-brand-800 px-3 py-1.5 text-white hover:bg-brand-700">
-            মূল নোটিশ দেখুন
+            {notice.notice_link_type === 'notice' ? 'মূল নোটিশ দেখুন' : 'প্রতিষ্ঠানের নোটিশ পাতা দেখুন'}
             <Icon name="external" className="h-3.5 w-3.5" />
           </a>
         )}
