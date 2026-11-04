@@ -258,7 +258,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
               </div>
 
               <div className="mt-4">
-                <JobSourceList sources={sources} />
+                <JobSourceList sources={sources} applyLink={job.apply_link} />
               </div>
 
               <p style={{ marginTop: '12px', fontSize: '12px', lineHeight: 1.7, color: 'var(--muted)' }}>
