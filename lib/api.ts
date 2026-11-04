@@ -16,6 +16,7 @@ import type {
   Question,
   CurrentAffair,
 } from '@/types/job';
+import type { NoticeKind, NoticeType, PublicNotice } from '@/types/notice';
 
 const DEFAULT_API_BASE_URL = 'https://jobs.kazitechsolutions.com/api/v1';
 const FETCH_TIMEOUT_MS = 8000;
@@ -27,6 +28,7 @@ export const REVALIDATE = {
   taxonomy: 3600,
   study: 900,
   sources: 900,
+  notices: 300,
 } as const;
 
 /** Thrown when the API is unreachable or answers with an unexpected error. */
@@ -217,6 +219,35 @@ export async function getSourceJobs(params: GetSourceJobsParams = {}): Promise<P
     throw new ApiUnavailableError(endpoint, 'No response received from source jobs endpoint');
   }
   return res;
+}
+
+// -------------------------------------------------------------
+// Notices, exam schedules and results (separate from jobs)
+// -------------------------------------------------------------
+export interface GetNoticesParams {
+  type?: NoticeType;
+  kind?: NoticeKind;
+  page?: number;
+  per_page?: number;
+}
+
+export async function getNotices(params: GetNoticesParams = {}): Promise<PaginatedResponse<PublicNotice>> {
+  const query = new URLSearchParams();
+  if (params.type) query.set('type', params.type);
+  if (params.kind) query.set('kind', params.kind);
+  query.set('page', clampPage(params.page).toString());
+  query.set('per_page', clampPerPage(params.per_page).toString());
+  const res = await apiFetch<PaginatedResponse<PublicNotice>>(`/notices?${query.toString()}`, REVALIDATE.notices);
+  return res ?? emptyPage(clampPage(params.page), clampPerPage(params.per_page));
+}
+
+/** Home page strip: an outage or an older server simply hides the section. */
+export async function getLatestNoticesSafe(limit = 5): Promise<PublicNotice[]> {
+  try {
+    return (await getNotices({ per_page: limit })).data;
+  } catch {
+    return [];
+  }
 }
 
 // -------------------------------------------------------------

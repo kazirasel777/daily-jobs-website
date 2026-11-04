@@ -53,7 +53,7 @@ export default function Footer({ categories = [] }: { categories?: JobCategory[]
 
           <nav aria-label="প্রস্তুতি ও আপডেট">
             <h3>আরও এগিয়ে থাকুন</h3>
-            <Link href="/#notices">নোটিশ ও ফলাফল</Link>
+            <Link href="/notices">নোটিশ ও ফলাফল</Link>
             <Link href="/question-bank">প্রশ্নব্যাংক ও প্রস্তুতি</Link>
             <Link href="/current-affairs">সাধারণ জ্ঞান</Link>
             <Link href="/sources">তথ্যের উৎস ↗</Link>

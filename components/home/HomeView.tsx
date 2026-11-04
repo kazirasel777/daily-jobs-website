@@ -10,6 +10,7 @@ import { formatDateBn, toBnDigits, toBnNumber } from '@/lib/format';
 import { jobPath, pagedPath } from '@/lib/site';
 import { jsonLd, siteSchema } from '@/lib/seo';
 import type { JobCategory, JobListItem, PaginatedResponse } from '@/types/job';
+import type { PublicNotice } from '@/types/notice';
 
 interface HomeViewProps {
   categories: JobCategory[];
@@ -20,6 +21,7 @@ interface HomeViewProps {
   selectedCategory?: JobCategory;
   closingSoon?: { job: JobListItem; days: number }[];
   isSiteSchemaNeeded?: boolean;
+  notices?: PublicNotice[];
 }
 
 export default function HomeView({
@@ -31,6 +33,7 @@ export default function HomeView({
   selectedCategory,
   closingSoon,
   isSiteSchemaNeeded = false,
+  notices = [],
 }: HomeViewProps) {
   const basePath = selectedCategory ? `/category/${selectedCategory.slug}` : '/';
 
@@ -186,7 +189,7 @@ export default function HomeView({
               </section>
             )}
 
-            <HomeNotices />
+            <HomeNotices notices={notices} />
 
             <HomeStudy />
           </main>

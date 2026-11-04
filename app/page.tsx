@@ -4,7 +4,7 @@ import { notFound, permanentRedirect } from 'next/navigation';
 import HomeView from '@/components/home/HomeView';
 import '@/components/home/home.css';
 
-import { getJobCategories, getJobs } from '@/lib/api';
+import { getJobCategories, getJobs, getLatestNoticesSafe } from '@/lib/api';
 import { daysUntil, parsePage, toBnDigits } from '@/lib/format';
 import { SITE, pagedPath } from '@/lib/site';
 import { pageMetadata } from '@/lib/seo';
@@ -54,12 +54,13 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
   const isFirstPage = page === 1;
 
   // Front-page extras are only fetched for page 1.
-  const [closingSource, categoryCounts] = isFirstPage
+  const [closingSource, categoryCounts, notices] = isFirstPage
     ? await Promise.all([
         getJobs({ page: 1, per_page: 50 }),
         Promise.all(categories.map((c) => getJobs({ category: c.slug, per_page: 1 }).then((r) => r.meta.total))),
+        getLatestNoticesSafe(5),
       ])
-    : [null, [] as number[]];
+    : [null, [] as number[], []];
 
   const closingAll = (closingSource?.data ?? [])
     .map((job) => ({ job, days: daysUntil(job.deadline) }))
@@ -76,6 +77,7 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
       page={page}
       closingSoon={closingSoon}
       isSiteSchemaNeeded={isFirstPage}
+      notices={notices}
     />
   );
 }

@@ -38,14 +38,14 @@ export default function HomeHeader() {
           <Link href="/#jobs-heading" className={isJobs ? 'active' : ''}>
             চাকরির বিজ্ঞপ্তি
           </Link>
-          <Link href="/#notices">নোটিশ ও ফলাফল</Link>
+          <Link href="/notices">নোটিশ ও ফলাফল</Link>
           <Link href="/question-bank" className={isQuestionBank ? 'active' : ''}>
             প্রশ্নব্যাংক
           </Link>
         </nav>
 
         <nav className="home-mobile-nav" aria-label="দ্রুত মেনু">
-          <Link href="/#notices">নোটিশ</Link>
+          <Link href="/notices">নোটিশ</Link>
           <Link href="/question-bank" className={isQuestionBank ? 'active' : ''}>
             প্রশ্নব্যাংক
           </Link>
