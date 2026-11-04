@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { notFound, permanentRedirect } from 'next/navigation';
 import DeadlineBadge from '@/components/DeadlineBadge';
 import Icon from '@/components/Icon';
+import JobSourceList, { visibleSources } from '@/components/JobSourceList';
 import HomeIcon from '@/components/home/HomeIcons';
 import ViewCounter from '@/components/ViewCounter';
 import { getJobDetail, getJobs } from '@/lib/api';
@@ -85,7 +86,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
   const images = (job.circular_images ?? []).filter((img): img is { page_number: number; url: string } => Boolean(img.url));
   const schema = expired ? null : jobPostingSchema(job);
   // অ্যাপের মতোই: "যেখানে খবর পেয়েছি" (discovery) মূল উৎস হিসেবে দেখানো হয় না
-  const sources = (job.sources ?? []).filter((src) => src.source_role !== 'discovery_source');
+  const sources = visibleSources(job.sources);
 
   const related = job.category
     ? (await getJobs({ category: job.category.slug, per_page: 6 }).catch(() => null))?.data.filter((j) => j.id !== job.id).slice(0, 4) ?? []
@@ -256,49 +257,9 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                 </Link>
               </div>
 
-              {/* API যা পাঠায় হুবহু তা-ই: প্রকাশক, তারিখ, পৃষ্ঠা আর একটি বাটন (অ্যাপেও একই) */}
-              <ul className="mt-4 divide-y divide-line/60">
-                {sources.map((src) => {
-                  const page = src.printed_page
-                    ? (src.printed_page.trim().startsWith('পৃষ্ঠা') ? toBnDigits(src.printed_page) : `পৃষ্ঠা ${toBnDigits(src.printed_page)}`)
-                    : null;
-                  const buttonUrl = src.button_label && isHttpUrl(src.button_url) ? src.button_url : null;
-
-                  return (
-                    <li key={src.id} className="py-3 first:pt-0 last:pb-0">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-ink">{src.source_name}</span>
-                            {src.is_verified && (
-                              <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">
-                                ✓ যাচাইকৃত
-                              </span>
-                            )}
-                          </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-                            {src.publication_date && <span>প্রকাশ: {formatDateBn(src.publication_date)}</span>}
-                            {page && <span>{page}</span>}
-                            {!buttonUrl && <span>অনলাইন লিংক নেই</span>}
-                          </div>
-                        </div>
-
-                        {buttonUrl && (
-                          <a
-                            href={buttonUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1 text-xs font-semibold text-brand-700 hover:border-brand-600 hover:underline"
-                          >
-                            {src.button_label}
-                            <Icon name="external" className="h-3 w-3" />
-                          </a>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="mt-4">
+                <JobSourceList sources={sources} />
+              </div>
 
               <p style={{ marginTop: '12px', fontSize: '12px', lineHeight: 1.7, color: 'var(--muted)' }}>
                 দৈনিক চাকরি কোনো সরকারি প্রতিষ্ঠানের প্রতিনিধিত্ব করে না। আবেদনের আগে মূল বিজ্ঞপ্তি মিলিয়ে নিন।

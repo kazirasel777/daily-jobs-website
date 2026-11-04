@@ -7,6 +7,8 @@ import type {
   JobListItem,
   JobDetail,
   DirectorySourceItem,
+  JobAvailability,
+  PublicJobSource,
   PaginatedResponse,
   SingleResponse,
   Subject,
@@ -176,6 +178,43 @@ export async function getJobSources(params: GetJobSourcesParams = {}): Promise<P
   const res = await apiFetch<PaginatedResponse<DirectorySourceItem>>(endpoint, REVALIDATE.sources);
   if (!res) {
     throw new ApiUnavailableError(endpoint, 'No response received from sources endpoint');
+  }
+  return res;
+}
+
+/** /sources পাতার জন্য: প্রতিটি প্রকাশিত চাকরি ও তার পাতায় দেখানো উৎস। */
+export interface SourceJobItem {
+  id: number;
+  slug: string;
+  title: string;
+  organization_name: string | null;
+  category: { slug: string; name: string } | null;
+  circular_published_date: string | null;
+  availability?: JobAvailability;
+  sources: PublicJobSource[];
+}
+
+export type SourceGroup = 'official' | 'newspaper' | 'epaper' | 'saved_image';
+
+export interface GetSourceJobsParams extends GetJobSourcesParams {
+  group?: SourceGroup;
+  verified?: boolean;
+}
+
+export async function getSourceJobs(params: GetSourceJobsParams = {}): Promise<PaginatedResponse<SourceJobItem>> {
+  const query = new URLSearchParams();
+  if (params.category && params.category !== 'all') query.set('category', params.category);
+  if (params.q?.trim()) query.set('q', params.q.trim());
+  if (params.group) query.set('group', params.group);
+  if (params.verified) query.set('verified', '1');
+  if (params.page && params.page > 1) query.set('page', String(params.page));
+  if (params.per_page) query.set('per_page', String(Math.min(params.per_page, 50)));
+
+  const qs = query.toString();
+  const endpoint = `/sources/jobs${qs ? `?${qs}` : ''}`;
+  const res = await apiFetch<PaginatedResponse<SourceJobItem>>(endpoint, REVALIDATE.sources);
+  if (!res) {
+    throw new ApiUnavailableError(endpoint, 'No response received from source jobs endpoint');
   }
   return res;
 }
