@@ -3,10 +3,10 @@
 //   পত্রিকায় প্রকাশিত হলে:
 //     পত্রিকা: দৈনিক প্রথম আলো · ৩ নভেম্বর ২০২৬ · পৃষ্ঠা ১১ · ই-পেপার দেখুন
 //     অফিসিয়াল ওয়েবসাইট: rajbari.gov.bd
-//     [মূল বিজ্ঞপ্তি দেখুন]
+//     [মূল বিজ্ঞপ্তি দেখুন / প্রতিষ্ঠানের নিয়োগ পাতা দেখুন / অফিসিয়াল ওয়েবসাইট দেখুন]
 //   শুধু অফিসিয়াল ওয়েবসাইটে পেলে:
 //     অফিসিয়াল ওয়েবসাইট: জেলা প্রশাসকের কার্যালয় (rajbari.gov.bd) · ৩ নভেম্বর ২০২৬
-//     [মূল বিজ্ঞপ্তি দেখুন]
+//     [মূল বিজ্ঞপ্তি দেখুন / প্রতিষ্ঠানের নিয়োগ পাতা দেখুন / অফিসিয়াল ওয়েবসাইট দেখুন]
 // জব পেজ ও /sources দুই জায়গায় একই।
 import Icon from '@/components/Icon';
 import { formatDateBn, isHttpUrl, toBnDigits } from '@/lib/format';
@@ -33,6 +33,14 @@ function url(v: string | null | undefined): string | null {
 
 const isPrint = (t: string) => t === 'newspaper' || t === 'epaper';
 
+/** লিংক যেখানে নেয়, বাটনে তা-ই লেখা। ধরন জানা না থাকলে "নিয়োগ পাতা" — অনিশ্চিত লিংক কখনো "মূল বিজ্ঞপ্তি" নয়। */
+export function noticeButtonLabel(src: PublicJobSource): string {
+  if (src.button_label && src.notice_link_type) return src.button_label;
+  if (src.notice_link_type === 'notice') return 'মূল বিজ্ঞপ্তি দেখুন';
+  if (src.notice_link_type === 'website') return 'অফিসিয়াল ওয়েবসাইট দেখুন';
+  return 'প্রতিষ্ঠানের নিয়োগ পাতা দেখুন';
+}
+
 /** "যেখানে খবর পেয়েছি" (discovery) মূল উৎস নয় — অ্যাপের মতোই বাদ। */
 export function visibleSources(sources: PublicJobSource[] | undefined): PublicJobSource[] {
   return (sources ?? []).filter((src) => src.source_role !== 'discovery_source');
@@ -54,13 +62,8 @@ export default function JobSourceList({ sources }: { sources: PublicJobSource[] 
       {sources.map((src) => {
         // পুরোনো API-তে name_url নেই — তখন source_url
         const nameUrl = url(src.name_url === undefined ? src.source_url : src.name_url);
-        const noticeUrl = url(src.notice_url ?? (src.link_kind === 'notice' ? src.button_url : null));
+        const noticeUrl = url(src.notice_url ?? (src.link_kind && src.link_kind !== 'none' ? src.button_url : null));
         const date = src.publication_date ? formatDateBn(src.publication_date) : null;
-        const verified = src.is_verified && (
-          <span className="ml-1 text-xs text-brand-700" title="মূল বিজ্ঞপ্তির সাথে মিলিয়ে দেখা হয়েছে">
-            ✓ যাচাইকৃত
-          </span>
-        );
 
         let lines: React.ReactNode;
         if (isPrint(src.source_type)) {
@@ -71,7 +74,6 @@ export default function JobSourceList({ sources }: { sources: PublicJobSource[] 
               <p>
                 <span className="text-muted">পত্রিকা: </span>
                 <span className="font-semibold text-ink break-words">{src.source_name}</span>
-                {verified}
                 {date && <span className="text-muted"> · {date}</span>}
                 {page && <span className="text-muted"> · {page}</span>}
                 {nameUrl && (
@@ -102,7 +104,6 @@ export default function JobSourceList({ sources }: { sources: PublicJobSource[] 
               ) : (
                 <span className="font-semibold text-ink break-words">{src.source_name}</span>
               )}
-              {verified}
               {date && <span className="text-muted"> · {date}</span>}
             </p>
           );
@@ -116,7 +117,7 @@ export default function JobSourceList({ sources }: { sources: PublicJobSource[] 
                 href={noticeUrl}
                 className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-brand-600/40 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800 hover:border-brand-600"
               >
-                মূল বিজ্ঞপ্তি দেখুন
+                {noticeButtonLabel(src)}
                 <Icon name="external" className="h-3 w-3" />
               </Ext>
             )}

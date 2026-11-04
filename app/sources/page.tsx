@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import EmptyState from '@/components/EmptyState';
 import Icon from '@/components/Icon';
-import { visibleSources } from '@/components/JobSourceList';
+import { noticeButtonLabel, visibleSources } from '@/components/JobSourceList';
 import Pagination from '@/components/Pagination';
 import { getSourceJobs } from '@/lib/api';
 import { formatDateBn, isHttpUrl, parsePage, toBnDigits } from '@/lib/format';
@@ -38,7 +38,7 @@ function sourceHost(value: string | null): string | null {
 function SourceCardRow({ source }: { source: PublicJobSource }) {
   const print = source.source_type === 'newspaper' || source.source_type === 'epaper';
   const nameUrl = sourceUrl(source.name_url === undefined ? source.source_url : source.name_url);
-  const noticeUrl = sourceUrl(source.notice_url ?? (source.link_kind === 'notice' ? source.button_url : null));
+  const noticeUrl = sourceUrl(source.notice_url ?? (source.link_kind && source.link_kind !== 'none' ? source.button_url : null));
   const website = print ? sourceUrl(source.website_url) : null;
   const host = sourceHost(nameUrl);
   const date = source.publication_date ? formatDateBn(source.publication_date) : null;
@@ -47,7 +47,7 @@ function SourceCardRow({ source }: { source: PublicJobSource }) {
     ? toBnDigits(printedPage.startsWith('পৃষ্ঠা') ? printedPage : `পৃষ্ঠা ${printedPage}`)
     : null;
   const actionUrl = noticeUrl || (print ? nameUrl : null);
-  const actionLabel = noticeUrl ? 'মূল বিজ্ঞপ্তি দেখুন' : 'ই-পেপার দেখুন';
+  const actionLabel = noticeUrl ? noticeButtonLabel(source) : 'ই-পেপার দেখুন';
   const sourceType = print ? 'পত্রিকা / ই-পেপার' : 'অফিসিয়াল ওয়েবসাইট';
 
   return (
@@ -80,11 +80,6 @@ function SourceCardRow({ source }: { source: PublicJobSource }) {
               </span>
             )}
           </div>
-          {source.is_verified && (
-            <span className="mt-0.5 flex items-center gap-1 text-xs text-brand-700" title="মূল বিজ্ঞপ্তির সাথে মিলিয়ে দেখা হয়েছে">
-              <Icon name="check" className="h-3 w-3" />যাচাইকৃত
-            </span>
-          )}
         </div>
       </div>
 

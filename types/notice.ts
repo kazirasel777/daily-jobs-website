@@ -17,6 +17,9 @@ export interface PublicNotice {
   body_text: string;
   official_website: string | null;
   source_url: string | null;
+  /** notice = এই নোটিশের নিজস্ব পেজ/PDF; career/null = প্রতিষ্ঠানের নোটিশ/নিয়োগ পাতা */
+  notice_link_type?: 'notice' | 'career' | null;
+  button_label?: string | null;
   image_url: string | null;
   pdf_url: string | null;
   published_at: string | null;
