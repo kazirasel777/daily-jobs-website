@@ -1,17 +1,17 @@
 // File: app/sources/page.tsx
-// তথ্যের উৎস: ছোট ভূমিকা, তারপর প্রতিটি প্রকাশিত চাকরি এক সারিতে —
-// #আইডি, শিরোনাম, উৎস (নাম · তারিখ · পৃষ্ঠা) আর সরাসরি লিংক থাকলে "মূল বিজ্ঞপ্তি দেখুন"।
+// তথ্যের উৎস: পাঠকের জন্য পরিচ্ছন্ন কার্ড; অভ্যন্তরীণ ID শুধু key/route-এ থাকে।
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import EmptyState from '@/components/EmptyState';
 import Icon from '@/components/Icon';
-import JobSourceList, { visibleSources } from '@/components/JobSourceList';
+import { visibleSources } from '@/components/JobSourceList';
 import Pagination from '@/components/Pagination';
 import { getSourceJobs } from '@/lib/api';
-import { parsePage, toBnDigits } from '@/lib/format';
+import { formatDateBn, isHttpUrl, parsePage, toBnDigits } from '@/lib/format';
 import { pageMetadata } from '@/lib/seo';
 import { jobPath, pagedPath } from '@/lib/site';
+import type { PublicJobSource } from '@/types/job';
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
@@ -19,6 +19,115 @@ const PER_PAGE = 30;
 
 function str(v: string | string[] | undefined): string | undefined {
   return typeof v === 'string' && v.trim() !== '' && v !== 'all' ? v.trim() : undefined;
+}
+
+function sourceUrl(value: string | null | undefined): string | null {
+  return isHttpUrl(value) ? value : null;
+}
+
+function sourceHost(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+// Kept local: the shared source display on job detail pages is unchanged.
+function SourceCardRow({ source }: { source: PublicJobSource }) {
+  const print = source.source_type === 'newspaper' || source.source_type === 'epaper';
+  const nameUrl = sourceUrl(source.name_url === undefined ? source.source_url : source.name_url);
+  const noticeUrl = sourceUrl(source.notice_url ?? (source.link_kind === 'notice' ? source.button_url : null));
+  const website = print ? sourceUrl(source.website_url) : null;
+  const host = sourceHost(nameUrl);
+  const date = source.publication_date ? formatDateBn(source.publication_date) : null;
+  const printedPage = print ? source.printed_page?.trim() : null;
+  const page = printedPage
+    ? toBnDigits(printedPage.startsWith('পৃষ্ঠা') ? printedPage : `পৃষ্ঠা ${printedPage}`)
+    : null;
+  const actionUrl = noticeUrl || (print ? nameUrl : null);
+  const actionLabel = noticeUrl ? 'মূল বিজ্ঞপ্তি দেখুন' : 'ই-পেপার দেখুন';
+  const sourceType = print ? 'পত্রিকা / ই-পেপার' : 'অফিসিয়াল ওয়েবসাইট';
+
+  return (
+    <li className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 lg:grid-cols-[minmax(0,1fr)_130px_145px] lg:gap-x-6">
+      <div className="col-span-2 flex min-w-0 items-center gap-2.5 lg:col-span-1">
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${print ? 'bg-marigold-50 text-marigold-700' : 'bg-brand-50 text-brand-700'}`}
+          title={sourceType}
+        >
+          {print ? <Icon name="book" /> : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} className="h-4 w-4" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <ellipse cx="12" cy="12" rx="4" ry="9" />
+              <path d="M3 12h18" />
+            </svg>
+          )}
+          <span className="sr-only">{sourceType}: </span>
+        </span>
+        <div className="min-w-0 text-sm leading-relaxed">
+          <div className="min-w-0">
+            {nameUrl ? (
+              <a href={nameUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-800 [overflow-wrap:anywhere] underline-offset-2 hover:underline">
+                {source.source_name}
+              </a>
+            ) : <span className="font-semibold text-ink [overflow-wrap:anywhere]">{source.source_name}</span>}
+            {host && (
+              <span className="block text-xs text-muted [overflow-wrap:anywhere] sm:inline">
+                <span aria-hidden="true" className="hidden px-1.5 text-line-strong sm:inline">·</span>
+                {host}
+              </span>
+            )}
+          </div>
+          {source.is_verified && (
+            <span className="mt-0.5 flex items-center gap-1 text-xs text-brand-700" title="মূল বিজ্ঞপ্তির সাথে মিলিয়ে দেখা হয়েছে">
+              <Icon name="check" className="h-3 w-3" />যাচাইকৃত
+            </span>
+          )}
+        </div>
+      </div>
+
+      {(date || page) && (
+        <div className="text-xs leading-relaxed text-muted lg:border-l lg:border-line/70 lg:pl-5">
+          {date && (
+            <>
+              <span className="mr-1.5 lg:mr-0 lg:block">প্রকাশ</span>
+              <time dateTime={source.publication_date ?? undefined} className="whitespace-nowrap text-ink-soft">{date}</time>
+            </>
+          )}
+          {page && <span className="block">{page}</span>}
+        </div>
+      )}
+
+      {actionUrl && (
+        <a
+          href={actionUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="col-start-2 inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 justify-self-end rounded-lg border border-brand-200 bg-brand-50/60 px-2.5 py-2 text-xs font-semibold whitespace-nowrap text-brand-800 hover:border-brand-600 hover:bg-brand-50 lg:col-start-3"
+        >
+          {actionLabel}<Icon name="external" className="h-3 w-3" />
+        </a>
+      )}
+
+      {print && (website || (noticeUrl && nameUrl)) && (
+        <div className="col-span-full flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted sm:pl-[42px]">
+          {website && (
+            <span className="min-w-0 [overflow-wrap:anywhere]">
+              অফিসিয়াল ওয়েবসাইট:{' '}
+              <a href={website} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-800 underline-offset-2 hover:underline">{sourceHost(website) ?? website}</a>
+            </span>
+          )}
+          {noticeUrl && nameUrl && (
+            <a href={nameUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-brand-800 underline-offset-2 hover:underline">
+              ই-পেপার দেখুন<Icon name="external" className="h-3 w-3" />
+            </a>
+          )}
+        </div>
+      )}
+    </li>
+  );
 }
 
 export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
@@ -100,18 +209,17 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
           />
         </div>
       ) : (
-        <ol className="mt-4 divide-y divide-line/70 rounded-2xl border border-line bg-surface px-3.5 shadow-xs sm:px-5">
+        <ol className="mt-4 space-y-2.5">
           {rows.map((job) => (
-            <li key={job.id} className="py-3.5">
-              <p className="text-sm leading-snug sm:text-base">
-                <span className="mr-1.5 font-mono text-xs font-semibold text-muted">#{toBnDigits(job.id)}</span>
+            <li key={job.id} className="rounded-xl border border-line bg-surface px-3.5 py-3.5 shadow-xs sm:px-[18px] sm:py-[15px]">
+              <h2 className="text-sm leading-relaxed sm:text-[15px]">
                 <Link href={jobPath(job)} className="font-serif font-bold text-ink break-words hover:text-brand-800 hover:underline">
                   {job.title}
                 </Link>
-              </p>
-              <div className="mt-1.5">
-                <JobSourceList sources={visibleSources(job.sources)} />
-              </div>
+              </h2>
+              <ul className="mt-2.5 space-y-3">
+                {visibleSources(job.sources).map((source) => <SourceCardRow key={source.id} source={source} />)}
+              </ul>
             </li>
           ))}
         </ol>
