@@ -34,94 +34,98 @@ function sourceHost(value: string | null): string | null {
   }
 }
 
+function SourceIcon({ print = false }: { print?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0" aria-hidden="true" focusable="false">
+      {print ? (
+        <>
+          <path d="M5 4h15v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8h2zM5 8v10M9 8h7M9 12h7M9 16h5" />
+        </>
+      ) : (
+        <>
+          <circle cx="12" cy="12" r="9" />
+          <ellipse cx="12" cy="12" rx="4" ry="9" />
+          <path d="M3 12h18" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function noticeButtonLabel(src: PublicJobSource): string {
+  if (src.button_label && (src as { notice_link_type?: string | null }).notice_link_type) {
+    return src.button_label;
+  }
+  const linkType = (src as { notice_link_type?: string | null }).notice_link_type;
+  if (linkType === 'notice') return 'মূল বিজ্ঞপ্তি দেখুন';
+  if (linkType === 'website') return 'অফিসিয়াল ওয়েবসাইট দেখুন';
+  return src.button_label || 'প্রতিষ্ঠানের নিয়োগ পাতা দেখুন';
+}
+
 // Kept local: the shared source display on job detail pages is unchanged.
 function SourceCardRow({ source }: { source: PublicJobSource }) {
   const print = source.source_type === 'newspaper' || source.source_type === 'epaper';
   const nameUrl = sourceUrl(source.name_url === undefined ? source.source_url : source.name_url);
-  const noticeUrl = sourceUrl(source.notice_url ?? (source.link_kind === 'notice' ? source.button_url : null));
-  const website = print ? sourceUrl(source.website_url) : null;
-  const host = sourceHost(nameUrl);
+  const noticeUrl = sourceUrl(source.notice_url ?? (source.link_kind && source.link_kind !== 'none' ? source.button_url : null));
+  // For print sources, name_url belongs to the newspaper, not the employer.
+  // Never use it as the institution website or as a substitute notice button.
+  const website = sourceUrl(source.website_url) ?? (print ? null : nameUrl);
   const date = source.publication_date ? formatDateBn(source.publication_date) : null;
   const printedPage = print ? source.printed_page?.trim() : null;
   const page = printedPage
     ? toBnDigits(printedPage.startsWith('পৃষ্ঠা') ? printedPage : `পৃষ্ঠা ${printedPage}`)
     : null;
-  const actionUrl = noticeUrl || (print ? nameUrl : null);
-  const actionLabel = noticeUrl ? 'মূল বিজ্ঞপ্তি দেখুন' : 'ই-পেপার দেখুন';
+  const actionLabel = source.button_label || noticeButtonLabel(source);
   const sourceType = print ? 'পত্রিকা / ই-পেপার' : 'অফিসিয়াল ওয়েবসাইট';
+  const buttonClass = 'inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap text-brand-800 transition-colors hover:border-brand-600 hover:bg-brand-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600';
 
   return (
-    <li className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 lg:grid-cols-[minmax(0,1fr)_130px_145px] lg:gap-x-6">
-      <div className="col-span-2 flex min-w-0 items-center gap-2.5 lg:col-span-1">
+    <li className="flex min-w-0 flex-wrap items-center gap-x-[18px] gap-y-2.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-relaxed">
         <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${print ? 'bg-marigold-50 text-marigold-700' : 'bg-brand-50 text-brand-700'}`}
+          className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${print ? 'bg-marigold-50 text-marigold-700' : 'bg-brand-50 text-brand-700'}`}
           title={sourceType}
         >
-          {print ? <Icon name="book" /> : (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} className="h-4 w-4" aria-hidden="true">
-              <circle cx="12" cy="12" r="9" />
-              <ellipse cx="12" cy="12" rx="4" ry="9" />
-              <path d="M3 12h18" />
-            </svg>
-          )}
+          <SourceIcon print={print} />
           <span className="sr-only">{sourceType}: </span>
         </span>
-        <div className="min-w-0 text-sm leading-relaxed">
-          <div className="min-w-0">
-            {nameUrl ? (
-              <a href={nameUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-800 [overflow-wrap:anywhere] underline-offset-2 hover:underline">
-                {source.source_name}
-              </a>
-            ) : <span className="font-semibold text-ink [overflow-wrap:anywhere]">{source.source_name}</span>}
-            {host && (
-              <span className="block text-xs text-muted [overflow-wrap:anywhere] sm:inline">
-                <span aria-hidden="true" className="hidden px-1.5 text-line-strong sm:inline">·</span>
-                {host}
-              </span>
-            )}
-          </div>
-          {source.is_verified && (
-            <span className="mt-0.5 flex items-center gap-1 text-xs text-brand-700" title="মূল বিজ্ঞপ্তির সাথে মিলিয়ে দেখা হয়েছে">
-              <Icon name="check" className="h-3 w-3" />যাচাইকৃত
-            </span>
-          )}
-        </div>
+        <span className="text-xs text-muted">প্রকাশিত:</span>
+        <span className="font-bold text-brand-800 [overflow-wrap:anywhere]">{source.source_name}</span>
+        {date && (
+          <>
+            <span aria-hidden="true" className="text-line-strong">·</span>
+            <time dateTime={source.publication_date ?? undefined} aria-label={`প্রকাশের তারিখ: ${date}`} className="font-semibold whitespace-nowrap text-ink-soft">{date}</time>
+          </>
+        )}
+        {page && (
+          <>
+            <span aria-hidden="true" className="text-line-strong">·</span>
+            <span className="font-semibold whitespace-nowrap text-ink-soft">{page}</span>
+          </>
+        )}
       </div>
 
-      {(date || page) && (
-        <div className="text-xs leading-relaxed text-muted lg:border-l lg:border-line/70 lg:pl-5">
-          {date && (
-            <>
-              <span className="mr-1.5 lg:mr-0 lg:block">প্রকাশ</span>
-              <time dateTime={source.publication_date ?? undefined} className="whitespace-nowrap text-ink-soft">{date}</time>
-            </>
-          )}
-          {page && <span className="block">{page}</span>}
-        </div>
-      )}
-
-      {actionUrl && (
-        <a
-          href={actionUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="col-start-2 inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 justify-self-end rounded-lg border border-brand-200 bg-brand-50/60 px-2.5 py-2 text-xs font-semibold whitespace-nowrap text-brand-800 hover:border-brand-600 hover:bg-brand-50 lg:col-start-3"
-        >
-          {actionLabel}<Icon name="external" className="h-3 w-3" />
-        </a>
-      )}
-
-      {print && (website || (noticeUrl && nameUrl)) && (
-        <div className="col-span-full flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted sm:pl-[42px]">
+      {(website || noticeUrl) && (
+        <div className="flex flex-wrap items-center gap-2">
           {website && (
-            <span className="min-w-0 [overflow-wrap:anywhere]">
-              অফিসিয়াল ওয়েবসাইট:{' '}
-              <a href={website} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-800 underline-offset-2 hover:underline">{sourceHost(website) ?? website}</a>
-            </span>
+            <a
+              href={website}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`নিয়োগকারী প্রতিষ্ঠানের ওয়েবসাইট: ${sourceHost(website) ?? website}`}
+              className={`${buttonClass} border-brand-200 bg-surface`}
+            >
+              <SourceIcon />প্রতিষ্ঠানের ওয়েবসাইট<Icon name="external" className="h-3 w-3" />
+            </a>
           )}
-          {noticeUrl && nameUrl && (
-            <a href={nameUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-brand-800 underline-offset-2 hover:underline">
-              ই-পেপার দেখুন<Icon name="external" className="h-3 w-3" />
+          {noticeUrl && (
+            <a
+              href={noticeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${buttonClass} border-brand-200 bg-brand-50/60`}
+            >
+              {actionLabel}<Icon name="external" className="h-3 w-3" />
             </a>
           )}
         </div>
