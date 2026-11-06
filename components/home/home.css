@@ -551,6 +551,7 @@
 }
 
 .home-card-link {
+  position: relative;
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
   gap: 22px;
@@ -626,19 +627,30 @@
 }
 
 .home-new {
-  color: #a57d37;
-  display: flex;
+  position: absolute;
+  inset: 8px 8px auto auto;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-weight: 500;
+  padding: 3px 7px;
+  border: 1px solid #eed69c;
+  border-radius: 6px;
+  background: #fff6d7;
+  color: #794407;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
-.home-new:before {
-  content: '';
-  width: 4px;
-  height: 4px;
-  background: #bc9c59;
-  border-radius: 50%;
+.home-new-star {
+  color: #7643bd;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.home-new ~ .home-job-copy {
+  padding-block-start: 20px;
 }
 
 .home-job-title {

@@ -30,7 +30,17 @@ export default function HomeJobCard({ job }: HomeJobCardProps) {
 
   return (
     <article className="home-job-card">
-      <Link className="home-card-link" href={href} aria-label={job.title}>
+      <Link
+        className="home-card-link"
+        href={href}
+        aria-label={job.recently_added ? `${job.title} — নতুন` : job.title}
+      >
+        {job.recently_added && (
+          <span className="home-new">
+            <span className="home-new-star" aria-hidden="true">✦</span>
+            নতুন
+          </span>
+        )}
         <div className="home-job-visual">
           {job.thumbnail_url ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -78,7 +88,6 @@ export default function HomeJobCard({ job }: HomeJobCardProps) {
             <span className={`home-tag ${palette.toneClass}`}>
               {job.category?.name || 'চাকরি'}
             </span>
-            {job.recently_added && <span className="home-new">নতুন</span>}
           </div>
 
           <h3 className="home-job-title">{job.title}</h3>
