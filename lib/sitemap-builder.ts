@@ -73,6 +73,8 @@ export function latest(dates: (Date | undefined)[]): Date | undefined {
 
 export interface BuildSitemapDataParams {
   jobs: JobListItem[];
+  /** Expired circulars still in the /old-jobs list (same canonical /job/ URLs, index-eligible). */
+  oldJobs?: JobListItem[];
   categories: JobCategory[];
   studyData?: StudySitemapData | null;
   siteUrl?: string;
@@ -85,6 +87,7 @@ export interface BuildSitemapDataParams {
  */
 export function buildSitemapData({
   jobs,
+  oldJobs = [],
   categories,
   studyData,
   siteUrl = 'https://dailyjobs.bd',
@@ -111,13 +114,22 @@ export function buildSitemapData({
     });
   }
 
-  // Job detail pages
-  for (const job of jobs) {
+  // Job detail pages: active first, then old circulars from the archive list (same URL, never twice)
+  const seen = new Set<string>();
+  for (const job of [...jobs, ...oldJobs]) {
+    const url = toUrl(`/job/${job.slug || job.id}`);
+    if (seen.has(url)) continue;
+    seen.add(url);
     const modified = validDate(job.updated_at) ?? validDate(job.published_at);
     entries.push({
-      url: toUrl(`/job/${job.slug || job.id}`),
+      url,
       ...(modified ? { lastModified: modified } : {}),
     });
+  }
+
+  // Archive list: only the unfiltered first page (filter and page URLs stay out of the sitemap)
+  if (oldJobs.length > 0) {
+    entries.push({ url: toUrl('/old-jobs') });
   }
 
   // Study pages follow the threshold (MIN_INDEXABLE_QUESTIONS = 10)
@@ -279,6 +291,8 @@ export async function resolveStudySitemapData({
 
 export interface GenerateSitemapParams {
   fetchJobs: () => Promise<JobListItem[]>;
+  /** Optional: an outage or an older API simply leaves old circulars out of this snapshot. */
+  fetchOldJobs?: () => Promise<JobListItem[]>;
   fetchCategories: () => Promise<JobCategory[]>;
   fetchStudyData?: () => Promise<StudySitemapData>;
   cache?: SitemapCacheAdapter | null;
@@ -297,6 +311,7 @@ export const SITEMAP_CACHE_KEY = 'dailyjobs-sitemap-v2';
  */
 export async function generateSitemapWithResilience({
   fetchJobs,
+  fetchOldJobs,
   fetchCategories,
   fetchStudyData,
   cache = null,
@@ -337,9 +352,20 @@ export async function generateSitemapWithResilience({
       }
     }
 
+    // 3b. Optional old circulars (archive list)
+    let oldJobs: JobListItem[] = [];
+    if (fetchOldJobs) {
+      try {
+        oldJobs = await fetchOldJobs();
+      } catch (err) {
+        console.warn('[Sitemap] Old jobs list unavailable:', err);
+      }
+    }
+
     // 4. Build sitemap entries
     const entries = buildSitemapData({
       jobs,
+      oldJobs,
       categories,
       studyData,
       siteUrl,

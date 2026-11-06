@@ -159,6 +159,42 @@ export async function getAllJobs(): Promise<JobListItem[]> {
 }
 
 // -------------------------------------------------------------
+// Old (expired) circulars — website-only archive list, newest deadline first
+// -------------------------------------------------------------
+export interface GetOldJobsParams {
+  category?: string;
+  page?: number;
+  per_page?: number;
+}
+
+/** `meta.listing_days` = how many days after the deadline a job stays in this list (admin setting). */
+export type OldJobsResponse = PaginatedResponse<JobListItem> & { meta: { listing_days?: number } };
+
+export async function getOldJobs(params: GetOldJobsParams = {}): Promise<OldJobsResponse> {
+  const query = new URLSearchParams();
+  query.set('availability', 'old');
+  if (params.category && params.category !== 'all') query.set('category', params.category);
+  query.set('page', clampPage(params.page).toString());
+  query.set('per_page', clampPerPage(params.per_page).toString());
+  const res = await apiFetch<OldJobsResponse>(`/jobs?${query.toString()}`, REVALIDATE.jobs);
+  return res ?? emptyPage(clampPage(params.page), clampPerPage(params.per_page));
+}
+
+/** Every page of the old-jobs list (sitemap). Throws rather than truncating. */
+export async function getAllOldJobs(): Promise<JobListItem[]> {
+  const all: JobListItem[] = [];
+  let page = 1;
+  let lastPage = 1;
+  do {
+    const res = await getOldJobs({ page, per_page: 50 });
+    all.push(...res.data);
+    lastPage = Math.min(res.meta.last_page || 1, 1000);
+    page++;
+  } while (page <= lastPage);
+  return all;
+}
+
+// -------------------------------------------------------------
 // Public sources directory
 // -------------------------------------------------------------
 export interface GetJobSourcesParams {

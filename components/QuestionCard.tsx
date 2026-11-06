@@ -1,9 +1,10 @@
 // File: components/QuestionCard.tsx
 // Read-only revision card: question, options, the correct answer and its explanation.
 import Icon from '@/components/Icon';
+import StimulusFigure from '@/components/StimulusFigure';
 import { toBnDigits } from '@/lib/format';
 import { sanitizeRichText } from '@/lib/sanitize';
-import { originLabel } from '@/lib/study';
+import { isImageStimulus, originLabel } from '@/lib/study';
 import type { Question } from '@/types/job';
 
 const OPTION_KEYS = ['a', 'b', 'c', 'd'] as const;
@@ -23,6 +24,11 @@ export default function QuestionCard({ question, number }: { question: Question;
       {question.stimulus && (
         <div className="mt-3 rounded-xl border-l-4 border-marigold-500 bg-paper p-4 text-sm">
           {question.stimulus.title && <p className="mb-1 font-bold text-ink">{question.stimulus.title}</p>}
+          {(question.stimulus.image || isImageStimulus(question.stimulus.kind)) && (
+            <div className="mb-3">
+              <StimulusFigure image={question.stimulus.image} fallbackAlt={`প্রশ্ন ${toBnDigits(number)}-এর চিত্র`} />
+            </div>
+          )}
           <div className="prose-bn text-sm" dangerouslySetInnerHTML={{ __html: sanitizeRichText(question.stimulus.body) }} />
         </div>
       )}

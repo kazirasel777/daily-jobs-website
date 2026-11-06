@@ -78,6 +78,11 @@ export default function HomeCategories({
             </Link>
           );
         })}
+        {/* ক্যাটাগরি তালিকার শেষে ("অন্যান্য চাকরি"-র নিচে) একবার — পুরোনো বিজ্ঞপ্তির তালিকা */}
+        <Link href="/old-jobs" className="home-category">
+          <HomeIcon name="clock" />
+          <span>পুরোনো বিজ্ঞপ্তি</span>
+        </Link>
       </div>
     </details>
   );

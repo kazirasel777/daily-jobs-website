@@ -8,6 +8,7 @@ import type { MetadataRoute } from 'next';
 import { unstable_cache } from 'next/cache';
 import {
   getAllJobs,
+  getAllOldJobs,
   getCurrentAffairs,
   getJobCategoriesSafe,
   getStudyCollections,
@@ -61,6 +62,7 @@ async function getStudyDataWithFallback(): Promise<StudySitemapData> {
 async function generateProductionSitemap(): Promise<SitemapPayload> {
   return generateSitemapWithResilience({
     fetchJobs: getAllJobs,
+    fetchOldJobs: getAllOldJobs,
     fetchCategories: getJobCategoriesSafe,
     fetchStudyData: getStudyDataWithFallback,
     cache: processCache,
@@ -75,7 +77,7 @@ const getCachedSitemap = unstable_cache(
   async (): Promise<SitemapPayload> => {
     return generateProductionSitemap();
   },
-  ['dailyjobs-sitemap-payload-v4'],
+  ['dailyjobs-sitemap-payload-v5'],
   {
     revalidate: SITEMAP_REVALIDATE_SECONDS,
     tags: ['sitemap'],

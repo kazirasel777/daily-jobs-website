@@ -20,7 +20,7 @@ import {
 } from '@/lib/format';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { jobPath } from '@/lib/site';
-import { jobPostingSchema, jsonLd, pageMetadata } from '@/lib/seo';
+import { breadcrumbSchema, jobPostingSchema, jsonLd, pageMetadata } from '@/lib/seo';
 import type { JobDetail } from '@/types/job';
 
 type Params = Promise<{ slug: string }>;
@@ -44,6 +44,31 @@ function metaDescription(job: JobDetail): string {
   return parts.length ? parts.join(' ') : 'নিয়োগ বিজ্ঞপ্তির বিস্তারিত, আবেদনের নিয়ম ও মূল বিজ্ঞপ্তির ছবি।';
 }
 
+/** API-র SEO শিরোনাম (এজেন্ট/সম্পাদকের যাচাই করা বা সার্ভারে তৈরি) আগে; না থাকলে পদ + প্রতিষ্ঠান। */
+function metaTitle(job: JobDetail): string {
+  const saved = job.seo?.title?.trim();
+  if (saved) return saved;
+  const org = job.organization_name?.trim();
+  return org && !job.title.includes(org) ? `${job.title} — ${org}` : job.title;
+}
+
+function isExpiredJob(job: JobDetail): boolean {
+  const days = daysUntil(job.deadline);
+  // The API decides availability (Dhaka day, admin thresholds); the date check covers older API builds.
+  return (job.availability !== undefined && job.availability !== 'active') || job.application_open === false || (days !== null && days < 0);
+}
+
+/**
+ * মেয়াদোত্তীর্ণ পেজও একই URL-এ, self-canonical ও index-যোগ্য থাকে (শুধু "archived" হওয়ার কারণে noindex নয়)।
+ * ব্যতিক্রম: লেখা বিবরণ ও মূল বিজ্ঞপ্তির ছবি — দুটোই নেই এমন পাতলা মেয়াদোত্তীর্ণ পেজ।
+ */
+function isIndexable(job: JobDetail): boolean {
+  if (!isExpiredJob(job)) return true;
+  const hasBody = stripHtml(job.description).length >= 60;
+  const hasImages = (job.circular_images ?? []).some((img) => Boolean(img.url));
+  return hasBody || hasImages;
+}
+
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug } = await params;
   const job = await getJobDetail(slug);
@@ -51,9 +76,8 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
   const images = [job.thumbnail_url, job.circular_images?.[0]?.url].filter((u): u is string => Boolean(u));
   return pageMetadata({
-    // Archived circulars stay reachable for old links but leave the search index.
-    index: job.availability !== 'archived',
-    title: job.seo?.title?.trim() || job.title,
+    index: isIndexable(job),
+    title: metaTitle(job),
     description: metaDescription(job),
     path: jobPath(job),
     type: 'article',
@@ -78,9 +102,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
   // Old links by numeric id point to the canonical slug URL.
   if (job.slug && decodeURIComponent(slug) !== job.slug) permanentRedirect(jobPath(job));
 
-  const days = daysUntil(job.deadline);
-  // The API decides availability (Dhaka day, admin thresholds); the date check covers older API builds.
-  const expired = (job.availability !== undefined && job.availability !== 'active') || job.application_open === false || (days !== null && days < 0);
+  const expired = isExpiredJob(job);
   const applyLink = !expired && isHttpUrl(job.apply_link) ? job.apply_link : null;
   const method = applicationMethodLabel(job.application_method);
   const images = (job.circular_images ?? []).filter((img): img is { page_number: number; url: string } => Boolean(img.url));
@@ -88,13 +110,25 @@ export default async function JobDetailPage({ params }: { params: Params }) {
   // অ্যাপের মতোই: "যেখানে খবর পেয়েছি" (discovery) মূল উৎস হিসেবে দেখানো হয় না
   const sources = visibleSources(job.sources);
 
-  const related = job.category
+  // সংশ্লিষ্ট সক্রিয় চাকরি (একই বিভাগ); মেয়াদোত্তীর্ণ পেজে বিভাগে কিছু না থাকলে সর্বশেষ সক্রিয় চাকরি
+  let related = job.category
     ? (await getJobs({ category: job.category.slug, per_page: 6 }).catch(() => null))?.data.filter((j) => j.id !== job.id).slice(0, 4) ?? []
     : [];
+  const relatedIsCategory = related.length > 0 && Boolean(job.category);
+  if (expired && related.length === 0) {
+    related = (await getJobs({ per_page: 5 }).catch(() => null))?.data.filter((j) => j.id !== job.id).slice(0, 4) ?? [];
+  }
+
+  const crumbs = [
+    { name: 'প্রথম পাতা', path: '/' },
+    ...(job.category ? [{ name: job.category.name, path: `/category/${job.category.slug}` }] : []),
+    { name: job.title, path: jobPath(job) },
+  ];
 
   return (
     <article className="detail-wrap wrap">
       {schema && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(schema) }} />}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(breadcrumbSchema(crumbs)) }} />
       {!expired && <ViewCounter jobId={job.id} />}
 
       <nav className="detail-breadcrumb" aria-label="অবস্থান">
@@ -183,7 +217,19 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                   ? <>এই বিজ্ঞপ্তির আবেদনের সময় {formatDateBn(job.deadline)} তারিখে শেষ হয়েছে।</>
                   : <>এই বিজ্ঞপ্তির আবেদনের সময় শেষ হয়েছে।</>}{' '}
                 তথ্যটি শুধু রেফারেন্সের জন্য রাখা হয়েছে — এখন আবেদন করা যাবে না।
-                {job.availability === 'archived' && ' (আর্কাইভ)'}
+              </p>
+              <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-bold">
+                {job.category ? (
+                  <Link href={`/category/${job.category.slug}`} className="text-brand-800 hover:underline">
+                    {job.category.name}: এখন আবেদন করা যায় এমন বিজ্ঞপ্তি →
+                  </Link>
+                ) : (
+                  <Link href="/" className="text-brand-800 hover:underline">সক্রিয় বিজ্ঞপ্তি দেখুন →</Link>
+                )}
+                {related.length > 0 && (
+                  <a href="#related-heading" className="text-brand-800 hover:underline">সংশ্লিষ্ট সক্রিয় চাকরি ↓</a>
+                )}
+                <Link href="/old-jobs" className="text-muted hover:underline">পুরোনো বিজ্ঞপ্তির তালিকা</Link>
               </p>
             </div>
           )}
@@ -329,11 +375,17 @@ export default async function JobDetailPage({ params }: { params: Params }) {
         </aside>
       </div>
 
-      {related.length > 0 && job.category && (
+      {related.length > 0 && (
         <section className="related-block" aria-labelledby="related-heading">
           <div className="related-title">
-            <h2 id="related-heading">{job.category.name}: আরও বিজ্ঞপ্তি</h2>
-            <Link href={`/category/${job.category.slug}`}>সব দেখুন →</Link>
+            <h2 id="related-heading">
+              {expired
+                ? relatedIsCategory && job.category
+                  ? `${job.category.name}: এখন আবেদন চলছে`
+                  : 'এখন আবেদন চলছে এমন বিজ্ঞপ্তি'
+                : `${job.category?.name ?? 'চাকরি'}: আরও বিজ্ঞপ্তি`}
+            </h2>
+            <Link href={relatedIsCategory && job.category ? `/category/${job.category.slug}` : '/'}>সব দেখুন →</Link>
           </div>
           <div className="related-jobs">
             {related.map((r) => (

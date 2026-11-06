@@ -559,6 +559,33 @@ test('Production sitemap: full success with published jobs generates job, catego
   assert.ok(cached !== null, 'Successful generation must populate cache');
 });
 
+test('Production sitemap: old circulars keep their /job/ URL, add /old-jobs once, and an old-list outage never blocks jobs', async () => {
+  const active = [{ id: 1, slug: 'active-job', category: { slug: 'govt_jobs', name: 'সরকারি চাকরি' }, published_at: '2026-10-10' }];
+  const old = [
+    { id: 2, slug: '2-old-job', category: { slug: 'govt_jobs', name: 'সরকারি চাকরি' }, published_at: '2026-06-01', updated_at: '2026-07-01' },
+    { id: 1, slug: 'active-job', category: null, published_at: '2026-10-10' }, // duplicate must not repeat
+  ];
+
+  const ok = await generateSitemapWithResilience({
+    fetchJobs: async () => active,
+    fetchOldJobs: async () => old,
+    fetchCategories: async () => [{ slug: 'govt_jobs', name: 'সরকারি চাকরি' }],
+  });
+  const urls = ok.entries.map((e) => e.url);
+  assert.ok(urls.includes('https://dailyjobs.bd/job/2-old-job'), 'Old circular keeps its canonical URL in the sitemap');
+  assert.equal(urls.filter((u) => u === 'https://dailyjobs.bd/job/active-job').length, 1, 'No duplicate job URLs');
+  assert.equal(urls.filter((u) => u.startsWith('https://dailyjobs.bd/old-jobs')).length, 1, 'Only the unfiltered archive list');
+
+  const down = await generateSitemapWithResilience({
+    fetchJobs: async () => active,
+    fetchOldJobs: async () => { throw new Error('422 from older API'); },
+    fetchCategories: async () => [],
+  });
+  const downUrls = down.entries.map((e) => e.url);
+  assert.ok(downUrls.includes('https://dailyjobs.bd/job/active-job'), 'Active coverage survives an old-list outage');
+  assert.equal(downUrls.includes('https://dailyjobs.bd/old-jobs'), false, 'Empty archive list stays out');
+});
+
 test('Production sitemap: genuine zero published jobs generates valid sitemap with static pages without error', async () => {
   // Successful API response returning 0 published jobs (genuine empty result, not API failure)
   const cache = new MemoryCacheAdapter();

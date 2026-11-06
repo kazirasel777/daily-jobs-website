@@ -6,7 +6,7 @@ This is the public web portal for **DailyJobs**, built with Next.js 16 (App Rout
 
 - **Home (`/`)**: latest active jobs (server-rendered, paginated with `?page=N`), category tiles with live counts, closing-soon list. Old `/?q=`, `/?search=` and `/?category=` links redirect permanently to `/search` and `/category/[slug]`.
 - **Category (`/category/[slug]`)**: only categories the API publishes; unknown slugs and out-of-range pages return 404. Empty categories are `noindex`.
-- **Job detail (`/job/[slug]`)**: ISR (5 min). Key facts, sanitised description, circular scans, apply box that links to the employer only. Numeric `/job/{id}` links redirect to the slug URL. Expired/unpublished jobs are a real 404 (the API does not return them).
+- **Job detail (`/job/[slug]`)**: ISR (5 min). Key facts, sanitised description, circular scans, apply box that links to the employer only. Numeric `/job/{id}` links redirect to the slug URL. Expired jobs keep their page (requested with `include_expired=1`) with an expired notice, no apply button, no JobPosting and no view counting; `archived` ones (admin-set threshold) are also `noindex`. Drafts/unpublished jobs are a real 404.
 - **Search (`/search?q=`)**: internal search, always `noindex, follow`.
 - **Question bank (`/question-bank`, `/question-bank/subject/[slug]`, `/question-bank/set/[slug]`)**: read-only questions with answers and explanations. Pages with fewer than 10 questions are `noindex` and left out of the sitemap until content grows.
 - **Current affairs (`/current-affairs`)**: same rule (indexed from 10 items).

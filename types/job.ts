@@ -135,11 +135,20 @@ export interface QuestionCollection {
   question_count: number;
 }
 
+export interface StimulusImage {
+  url: string; // public URL, or a signed one that expires (private disk)
+  width: number | null;
+  height: number | null;
+  alt: string; // plain-text description derived from the stimulus body
+}
+
 export interface QuestionStimulus {
   id: number;
-  kind: string;
+  kind: string; // passage | image | chart
   title: string | null;
   body: string;
+  /** Older API builds omit it; null when there is no image or the file is unavailable. */
+  image?: StimulusImage | null;
 }
 
 export interface Question {

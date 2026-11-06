@@ -14,3 +14,8 @@ export function originLabel(origin: string): { label: string; className: string 
       return { label: 'অনুশীলনী প্রশ্ন', className: 'bg-stone-100 text-stone-700 ring-stone-300' };
   }
 }
+
+/** These stimuli carry the question's meaning in their image; without it the question is incomplete. */
+export function isImageStimulus(kind: string | null | undefined): boolean {
+  return kind === 'image' || kind === 'chart';
+}
