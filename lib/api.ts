@@ -15,6 +15,7 @@ import type {
   QuestionCollection,
   Question,
   CurrentAffair,
+  SitemapJobItem,
 } from '@/types/job';
 import type { NoticeKind, NoticeType, PublicNotice } from '@/types/notice';
 
@@ -43,18 +44,30 @@ function getApiBaseUrl(): string {
   return (process.env.API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/+$/, '');
 }
 
-/**
- * Returns parsed JSON, `null` for a genuine 404, and throws ApiUnavailableError for
- * timeouts, network failures and other non-2xx answers.
- */
-async function apiFetch<T>(endpoint: string, revalidate: number): Promise<T | null> {
-  const url = `${getApiBaseUrl()}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+/** Our own website server. With the same key set on Laravel (PUBLIC_API_SERVER_KEY) it gets its own,
+ * larger rate-limit bucket: every Vercel render comes from a few shared IPs, so a Googlebot crawl
+ * used to hit the per-IP limit (429), which the page then showed as a 5xx error. */
+function apiHeaders(): Record<string, string> {
+  const key = process.env.API_SERVER_KEY?.trim();
+  return key ? { Accept: 'application/json', 'X-Server-Key': key } : { Accept: 'application/json' };
+}
+
+/** Short, passing failures worth one more try (rate limit, gateway, network blip). */
+const RETRYABLE_STATUS = new Set([429, 502, 503, 504]);
+const RETRY_DELAY_MS = 400;
+/** Only a failure that came back quickly is retried, so one page never waits much past one timeout. */
+const RETRY_IF_FAILED_WITHIN_MS = 4000;
+const RETRY_TIMEOUT_MS = 5000;
+
+class RetryableFailure extends Error {}
+
+async function fetchOnce<T>(url: string, endpoint: string, revalidate: number, timeoutMs: number): Promise<T | null> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(url, {
-      headers: { Accept: 'application/json' },
+      headers: apiHeaders(),
       signal: controller.signal,
       next: { revalidate },
     });
@@ -62,17 +75,43 @@ async function apiFetch<T>(endpoint: string, revalidate: number): Promise<T | nu
     if (response.status === 404) return null;
     if (!response.ok) {
       console.error(`[API Error] ${response.status} from ${url}`);
+      if (RETRYABLE_STATUS.has(response.status)) throw new RetryableFailure(`HTTP ${response.status}`);
       throw new ApiUnavailableError(endpoint, `HTTP ${response.status}`);
     }
 
     return (await response.json()) as T;
   } catch (error) {
-    if (error instanceof ApiUnavailableError) throw error;
+    if (error instanceof ApiUnavailableError || error instanceof RetryableFailure) throw error;
     const detail = error instanceof Error ? error.message : String(error);
     console.error(`[API Fetch Failed] ${url}: ${detail}`);
-    throw new ApiUnavailableError(endpoint, detail);
+    // A timeout is not retried (it already used the whole budget); other network errors are.
+    if (controller.signal.aborted) throw new ApiUnavailableError(endpoint, detail);
+    throw new RetryableFailure(detail);
   } finally {
     clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Returns parsed JSON, `null` for a genuine 404, and throws ApiUnavailableError for
+ * timeouts, network failures and other non-2xx answers. A quick passing failure
+ * (429/502/503/504 or a dropped connection) is retried once before giving up.
+ */
+async function apiFetch<T>(endpoint: string, revalidate: number): Promise<T | null> {
+  const url = `${getApiBaseUrl()}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const started = Date.now();
+  try {
+    return await fetchOnce<T>(url, endpoint, revalidate, FETCH_TIMEOUT_MS);
+  } catch (error) {
+    if (!(error instanceof RetryableFailure)) throw error;
+    if (Date.now() - started > RETRY_IF_FAILED_WITHIN_MS) throw new ApiUnavailableError(endpoint, error.message);
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    try {
+      return await fetchOnce<T>(url, endpoint, revalidate, RETRY_TIMEOUT_MS);
+    } catch (retryError) {
+      if (retryError instanceof RetryableFailure) throw new ApiUnavailableError(endpoint, retryError.message);
+      throw retryError;
+    }
   }
 }
 
@@ -192,6 +231,15 @@ export async function getAllOldJobs(): Promise<JobListItem[]> {
     page++;
   } while (page <= lastPage);
   return all;
+}
+
+/**
+ * Every job that was ever published (active and any old one, without the /old-jobs time limit),
+ * for the sitemap. `null` = this API build has no such endpoint yet (older Laravel).
+ */
+export async function getSitemapJobs(): Promise<SitemapJobItem[] | null> {
+  const res = await apiFetch<{ data: SitemapJobItem[] }>('/sitemap/jobs', REVALIDATE.jobs);
+  return res ? res.data : null;
 }
 
 // -------------------------------------------------------------

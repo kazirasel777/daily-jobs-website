@@ -5,6 +5,17 @@ export interface JobCategory {
   name: string;
 }
 
+/** One row of /api/v1/sitemap/jobs: every once-published job, with the page's index rule. */
+export interface SitemapJobItem {
+  id: number;
+  slug: string | null;
+  availability: JobAvailability;
+  /** false = thin expired page (no 60+ char text and no circular image) → noindex, so not in the sitemap. */
+  indexable: boolean;
+  published_at: string | null;
+  updated_at: string | null;
+}
+
 export interface JobListItem {
   id: number;
   slug: string;

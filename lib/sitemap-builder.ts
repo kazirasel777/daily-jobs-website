@@ -3,7 +3,7 @@
 // Separated from the Next.js route entrypoint so it can be tested directly and
 // reliably without framework-internal mocks.
 import type { MetadataRoute } from 'next';
-import type { JobCategory, JobListItem, QuestionCollection, Subject } from '@/types/job';
+import type { JobCategory, JobListItem, QuestionCollection, SitemapJobItem, Subject } from '@/types/job';
 
 /** Target revalidation interval for search engine discovery (15 minutes). */
 export const SITEMAP_REVALIDATE_SECONDS = 900;
@@ -75,6 +75,12 @@ export interface BuildSitemapDataParams {
   jobs: JobListItem[];
   /** Expired circulars still in the /old-jobs list (same canonical /job/ URLs, index-eligible). */
   oldJobs?: JobListItem[];
+  /**
+   * Every once-published job from /sitemap/jobs (no archive-window limit). When given, job URLs
+   * come from here (only `indexable` ones, so the sitemap never lists a noindex page) and
+   * `oldJobs` is not needed.
+   */
+  indexJobs?: SitemapJobItem[] | null;
   categories: JobCategory[];
   studyData?: StudySitemapData | null;
   siteUrl?: string;
@@ -88,6 +94,7 @@ export interface BuildSitemapDataParams {
 export function buildSitemapData({
   jobs,
   oldJobs = [],
+  indexJobs = null,
   categories,
   studyData,
   siteUrl = 'https://dailyjobs.bd',
@@ -114,9 +121,14 @@ export function buildSitemapData({
     });
   }
 
-  // Job detail pages: active first, then old circulars from the archive list (same URL, never twice)
+  // Job detail pages. With the full list every once-published, indexable job is listed for as
+  // long as its page stays live, not only while it is in the /old-jobs window. Without it
+  // (older API): active first, then old circulars from the archive list. Same URL never twice.
+  const jobSources: Array<Pick<JobListItem, 'id' | 'slug' | 'published_at'> & { updated_at?: string | null }> = indexJobs
+    ? [...jobs, ...indexJobs.filter((j) => j.indexable).map((j) => ({ ...j, slug: j.slug ?? '' }))]
+    : [...jobs, ...oldJobs];
   const seen = new Set<string>();
-  for (const job of [...jobs, ...oldJobs]) {
+  for (const job of jobSources) {
     const url = toUrl(`/job/${job.slug || job.id}`);
     if (seen.has(url)) continue;
     seen.add(url);
@@ -128,7 +140,8 @@ export function buildSitemapData({
   }
 
   // Archive list: only the unfiltered first page (filter and page URLs stay out of the sitemap)
-  if (oldJobs.length > 0) {
+  const hasOldJobs = indexJobs ? indexJobs.some((j) => j.availability !== 'active') : oldJobs.length > 0;
+  if (hasOldJobs) {
     entries.push({ url: toUrl('/old-jobs') });
   }
 
@@ -293,6 +306,11 @@ export interface GenerateSitemapParams {
   fetchJobs: () => Promise<JobListItem[]>;
   /** Optional: an outage or an older API simply leaves old circulars out of this snapshot. */
   fetchOldJobs?: () => Promise<JobListItem[]>;
+  /**
+   * Optional full list of once-published jobs (/sitemap/jobs). `null` = endpoint not deployed yet,
+   * then `fetchOldJobs` is used instead.
+   */
+  fetchSitemapJobs?: () => Promise<SitemapJobItem[] | null>;
   fetchCategories: () => Promise<JobCategory[]>;
   fetchStudyData?: () => Promise<StudySitemapData>;
   cache?: SitemapCacheAdapter | null;
@@ -312,6 +330,7 @@ export const SITEMAP_CACHE_KEY = 'dailyjobs-sitemap-v2';
 export async function generateSitemapWithResilience({
   fetchJobs,
   fetchOldJobs,
+  fetchSitemapJobs,
   fetchCategories,
   fetchStudyData,
   cache = null,
@@ -352,13 +371,35 @@ export async function generateSitemapWithResilience({
       }
     }
 
-    // 3b. Optional old circulars (archive list)
+    // 3b. Old circulars: the full once-published list first, the /old-jobs window as fallback
+    let indexJobs: SitemapJobItem[] | null = null;
     let oldJobs: JobListItem[] = [];
-    if (fetchOldJobs) {
+    let oldCoverageFailed = false;
+    if (fetchSitemapJobs) {
+      try {
+        indexJobs = await fetchSitemapJobs();
+      } catch (err) {
+        oldCoverageFailed = true;
+        console.warn('[Sitemap] Full job list unavailable:', err);
+      }
+    }
+    if (indexJobs === null && fetchOldJobs) {
       try {
         oldJobs = await fetchOldJobs();
       } catch (err) {
+        oldCoverageFailed = true;
         console.warn('[Sitemap] Old jobs list unavailable:', err);
+      }
+    }
+
+    // Last known good: an outage of the old-job lists must not quietly drop hundreds of live
+    // pages from the sitemap. A recent complete snapshot is served instead when there is one.
+    if (oldCoverageFailed && cache) {
+      const cached = await cache.get<SitemapPayload>(SITEMAP_CACHE_KEY).catch(() => null);
+      const generatedAt = cached ? (typeof cached.data.generatedAt === 'number' ? cached.data.generatedAt : cached.createdAt) : 0;
+      if (cached && now - generatedAt <= maxStaleAgeMs) {
+        console.warn('[Sitemap] Serving the last complete snapshot while the old-job list is down.');
+        return { entries: cached.data.entries, generatedAt };
       }
     }
 
@@ -366,6 +407,7 @@ export async function generateSitemapWithResilience({
     const entries = buildSitemapData({
       jobs,
       oldJobs,
+      indexJobs,
       categories,
       studyData,
       siteUrl,
@@ -376,8 +418,8 @@ export async function generateSitemapWithResilience({
       generatedAt: now, // True successful generation timestamp
     };
 
-    // 5. Store successful sitemap in durable cache with generation timestamp
-    if (cache) {
+    // 5. Store only a complete sitemap as the last-known-good snapshot
+    if (cache && !oldCoverageFailed) {
       await cache.set(SITEMAP_CACHE_KEY, payload, now).catch(() => {});
     }
 

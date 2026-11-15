@@ -116,7 +116,7 @@ export default function HomeView({
             </p>
           </aside>
 
-          <main className="home-main" id="main">
+          <div className="home-main" id="jobs-main">
             <section aria-labelledby="jobs-heading">
               <div className="home-section-bar">
                 <div className="home-section-heading">
@@ -192,7 +192,7 @@ export default function HomeView({
             <HomeNotices notices={notices} />
 
             <HomeStudy />
-          </main>
+          </div>
         </div>
       </div>
     </div>

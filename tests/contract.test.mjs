@@ -586,6 +586,48 @@ test('Production sitemap: old circulars keep their /job/ URL, add /old-jobs once
   assert.equal(downUrls.includes('https://dailyjobs.bd/old-jobs'), false, 'Empty archive list stays out');
 });
 
+test('Production sitemap: full job list keeps every indexable once-published page, skips thin noindex pages', async () => {
+  const active = [{ id: 1, slug: 'active-job', category: { slug: 'govt_jobs', name: 'সরকারি চাকরি' }, published_at: '2026-10-10' }];
+  const all = [
+    { id: 1, slug: 'active-job', availability: 'active', indexable: true, published_at: '2026-10-10', updated_at: null },
+    { id: 5, slug: '5-very-old-job', availability: 'archived', indexable: true, published_at: '2025-01-01', updated_at: '2025-02-01' },
+    { id: 6, slug: '6-thin-old-job', availability: 'archived', indexable: false, published_at: '2025-01-01', updated_at: null },
+  ];
+  const payload = await generateSitemapWithResilience({
+    fetchJobs: async () => active,
+    fetchSitemapJobs: async () => all,
+    fetchOldJobs: async () => { throw new Error('must not be needed'); },
+    fetchCategories: async () => [],
+  });
+  const urls = payload.entries.map((e) => e.url);
+  assert.ok(urls.includes('https://dailyjobs.bd/job/5-very-old-job'), 'Old page outside the archive window stays listed');
+  assert.equal(urls.includes('https://dailyjobs.bd/job/6-thin-old-job'), false, 'noindex page never in the sitemap');
+  assert.equal(urls.filter((u) => u === 'https://dailyjobs.bd/job/active-job').length, 1);
+  assert.ok(urls.includes('https://dailyjobs.bd/old-jobs'));
+});
+
+test('Production sitemap: when the old-job list fails, the last complete snapshot is served', async () => {
+  const cache = new MemoryCacheAdapter();
+  const active = [{ id: 1, slug: 'active-job', category: null, published_at: '2026-10-10' }];
+  const now = Date.now();
+  await generateSitemapWithResilience({
+    fetchJobs: async () => active,
+    fetchSitemapJobs: async () => [{ id: 7, slug: '7-old', availability: 'expired', indexable: true, published_at: null, updated_at: null }],
+    fetchCategories: async () => [],
+    cache,
+    now,
+  });
+  const later = await generateSitemapWithResilience({
+    fetchJobs: async () => active,
+    fetchSitemapJobs: async () => { throw new Error('503'); },
+    fetchCategories: async () => [],
+    cache,
+    now: now + 60_000,
+  });
+  assert.ok(later.entries.some((e) => e.url === 'https://dailyjobs.bd/job/7-old'), 'Old URL survives the outage');
+  assert.equal(later.generatedAt, now, 'Snapshot keeps its true age');
+});
+
 test('Production sitemap: genuine zero published jobs generates valid sitemap with static pages without error', async () => {
   // Successful API response returning 0 published jobs (genuine empty result, not API failure)
   const cache = new MemoryCacheAdapter();

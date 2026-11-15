@@ -140,6 +140,8 @@ export async function generateMetadata({ searchParams }: { searchParams: SearchP
   const pageSuffix = page > 1 ? ` — পৃষ্ঠা ${toBnDigits(page)}` : '';
 
   return pageMetadata({
+    // খোঁজা (?q=) বা বিভাগ-ফিল্টার করা তালিকা index নয়; মূল তালিকা ও তার পৃষ্ঠা index-যোগ্য
+    index: !str(sp.q) && !str(sp.category),
     title: `তথ্যের উৎস${pageSuffix}`,
     description:
       'দৈনিক চাকরিতে প্রকাশিত প্রতিটি নিয়োগ বিজ্ঞপ্তির মূল উৎস: প্রতিষ্ঠানের ওয়েবসাইট, পত্রিকা বা ই-পেপারের নাম ও তারিখ, আর মূল বিজ্ঞপ্তির লিংক। দৈনিক চাকরি কোনো সরকারি সংস্থা নয়।',

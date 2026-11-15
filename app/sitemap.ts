@@ -1,5 +1,7 @@
 // File: app/sitemap.ts
-// Only canonical, indexable pages. Jobs come from every page of the public API;
+// Only canonical, indexable pages. Every once-published job page that is still live and
+// indexable is listed (/api/v1/sitemap/jobs), not only those inside the /old-jobs window.
+// Active jobs come from every page of the public API;
 // if the API fails the sitemap answers with an error (crawlers retry later)
 // instead of publishing a truncated or empty list. Rendered on demand with Next.js
 // data caching (15-minute bounded revalidation) so a deploy never depends on the
@@ -11,6 +13,7 @@ import {
   getAllOldJobs,
   getCurrentAffairs,
   getJobCategoriesSafe,
+  getSitemapJobs,
   getStudyCollections,
   getStudyQuestions,
   getStudySubjects,
@@ -63,6 +66,7 @@ async function generateProductionSitemap(): Promise<SitemapPayload> {
   return generateSitemapWithResilience({
     fetchJobs: getAllJobs,
     fetchOldJobs: getAllOldJobs,
+    fetchSitemapJobs: getSitemapJobs,
     fetchCategories: getJobCategoriesSafe,
     fetchStudyData: getStudyDataWithFallback,
     cache: processCache,
@@ -77,7 +81,7 @@ const getCachedSitemap = unstable_cache(
   async (): Promise<SitemapPayload> => {
     return generateProductionSitemap();
   },
-  ['dailyjobs-sitemap-payload-v5'],
+  ['dailyjobs-sitemap-payload-v6'],
   {
     revalidate: SITEMAP_REVALIDATE_SECONDS,
     tags: ['sitemap'],
