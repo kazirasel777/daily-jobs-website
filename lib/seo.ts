@@ -158,3 +158,43 @@ export function jobPostingSchema(job: JobDetail): Record<string, unknown> | null
 
   return schema;
 }
+
+/**
+ * Notice / exam schedule / result page: an Article (never JobPosting — these are not openings).
+ * Only facts shown on the page are used; image only when the notice has one.
+ */
+export function noticeArticleSchema(input: {
+  path: string;
+  headline: string;
+  description: string;
+  datePublished: string | null;
+  dateModified?: string | null;
+  image?: string | null;
+  organizationName?: string | null;
+  organizationUrl?: string | null;
+}): Record<string, unknown> | null {
+  if (!input.datePublished || isNaN(new Date(input.datePublished).getTime())) return null;
+  const url = getSiteUrl();
+  const modified = input.dateModified && !isNaN(new Date(input.dateModified).getTime()) ? input.dateModified : input.datePublished;
+  const schema: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: input.headline.length > 110 ? `${input.headline.slice(0, 109)}…` : input.headline,
+    description: input.description,
+    datePublished: input.datePublished,
+    dateModified: modified,
+    inLanguage: 'bn-BD',
+    mainEntityOfPage: { '@type': 'WebPage', '@id': absoluteUrl(input.path) },
+    author: { '@type': 'Organization', name: SITE.name, url },
+    publisher: { '@type': 'Organization', name: SITE.name, url, logo: { '@type': 'ImageObject', url: absoluteUrl('/brand/logo-512.png') } },
+  };
+  if (input.image) schema.image = [input.image];
+  if (input.organizationName) {
+    schema.about = {
+      '@type': 'Organization',
+      name: input.organizationName,
+      ...(input.organizationUrl ? { url: input.organizationUrl } : {}),
+    };
+  }
+  return schema;
+}

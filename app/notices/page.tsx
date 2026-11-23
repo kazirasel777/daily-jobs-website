@@ -1,154 +1,145 @@
 // File: app/notices/page.tsx
-// নোটিশ, পরীক্ষার সময়সূচি ও রেজাল্ট — চাকরি থেকে আলাদা। প্রতিটির সাথে প্রতিষ্ঠান, তারিখ,
-// অফিসিয়াল ওয়েবসাইট আর মূল নোটিশের লিংক। ডেটা না থাকলে কিছু বানিয়ে দেখানো হয় না।
+// নোটিশ, পরীক্ষার সময়সূচি, প্রবেশপত্র, মৌখিক পরীক্ষা ও ফলাফল — চাকরি থেকে আলাদা।
+// প্রতিটি কার্ড নোটিশের নিজস্ব পাতায় (/notices/{slug}) নেয়; অফিসিয়াল লিংক সেখানে।
+// SEO: ফিল্টার ছাড়া পাতাগুলো (?page=N সহ) self-canonical ও ইনডেক্সযোগ্য; ফিল্টার করা দৃশ্য noindex, follow।
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import EmptyState from '@/components/EmptyState';
-import Icon from '@/components/Icon';
 import Pagination from '@/components/Pagination';
+import NoticeCard from '@/components/notices/NoticeCard';
+import NoticeHashRedirect from '@/components/notices/NoticeHashRedirect';
 import { getNotices, type GetNoticesParams } from '@/lib/api';
-import { formatDateBn, isHttpUrl, parsePage, toBnDigits } from '@/lib/format';
+import { formatDateBn, parsePage, toBnDigits } from '@/lib/format';
+import { eventState, noticeTone } from '@/lib/notice';
 import { pageMetadata } from '@/lib/seo';
-import { pagedPath } from '@/lib/site';
+import { noticePath } from '@/lib/site';
 import type { PublicNotice } from '@/types/notice';
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
-const PER_PAGE = 20;
+const PER_PAGE = 18;
 
-const FILTERS: { key: string; label: string; params: Pick<GetNoticesParams, 'type' | 'kind'> }[] = [
-  { key: 'all', label: 'সব', params: {} },
-  { key: 'exam_schedule', label: 'পরীক্ষার সময়সূচি', params: { kind: 'exam_schedule' } },
-  { key: 'viva', label: 'মৌখিক পরীক্ষা', params: { kind: 'viva' } },
-  { key: 'admit_card', label: 'প্রবেশপত্র', params: { kind: 'admit_card' } },
-  { key: 'result', label: 'রেজাল্ট', params: { type: 'result' } },
+const NOTICE_FILTERS: { key: string; label: string; heading: string; params: Pick<GetNoticesParams, 'type' | 'kind'> }[] = [
+  { key: 'all', label: 'সব', heading: 'নোটিশ, পরীক্ষার সময়সূচি ও ফলাফল', params: {} },
+  { key: 'exam_schedule', label: 'পরীক্ষার সময়সূচি', heading: 'পরীক্ষার সময়সূচি', params: { kind: 'exam_schedule' } },
+  { key: 'admit_card', label: 'প্রবেশপত্র', heading: 'প্রবেশপত্রের নোটিশ', params: { kind: 'admit_card' } },
+  { key: 'viva', label: 'মৌখিক পরীক্ষা', heading: 'মৌখিক পরীক্ষার (ভাইভা) সময়সূচি', params: { kind: 'viva' } },
+  { key: 'result', label: 'ফলাফল', heading: 'নিয়োগ পরীক্ষার ফলাফল', params: { type: 'result' } },
+  { key: 'general', label: 'অন্যান্য নোটিশ', heading: 'অন্যান্য নোটিশ', params: { kind: 'general' } },
 ];
 
-function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return url;
-  }
+function filterFrom(raw: string | string[] | undefined) {
+  return NOTICE_FILTERS.find((f) => f.key === raw) ?? NOTICE_FILTERS[0];
+}
+
+function hrefFor(page: number, key: string): string {
+  const params = new URLSearchParams();
+  if (key !== 'all') params.set('filter', key);
+  if (page > 1) params.set('page', String(page));
+  const qs = params.toString();
+  return `/notices${qs ? `?${qs}` : ''}`;
 }
 
 export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
-  const page = parsePage((await searchParams).page);
+  const sp = await searchParams;
+  const page = parsePage(sp.page);
+  const filter = filterFrom(sp.filter);
+  const unknownParam = Object.keys(sp).some((k) => k !== 'page' && k !== 'filter');
   const pageSuffix = page > 1 ? ` — পৃষ্ঠা ${toBnDigits(page)}` : '';
-  return pageMetadata({
-    title: `নোটিশ ও পরীক্ষার সময়সূচি${pageSuffix}`,
+  const meta = pageMetadata({
+    title: `${filter.heading}${pageSuffix}`,
     description:
-      'বিভিন্ন সরকারি প্রতিষ্ঠানের পরীক্ষার সময়সূচি, মৌখিক পরীক্ষা, প্রবেশপত্র ও ফলাফলের নোটিশ, প্রতিটির সাথে প্রতিষ্ঠানের নাম, তারিখ আর মূল নোটিশের লিংক। দৈনিক চাকরি কোনো সরকারি সংস্থা নয়।',
-    path: pagedPath('/notices', page),
+      'সরকারি নিয়োগ পরীক্ষার সময়সূচি, প্রবেশপত্র, মৌখিক পরীক্ষা ও ফলাফলের নোটিশ — প্রতিষ্ঠান, তারিখ, সময়, কেন্দ্র আর মূল নোটিশের লিংকসহ। দৈনিক চাকরি কোনো সরকারি সংস্থা নয়।',
+    path: hrefFor(page, filter.key),
+    // ফিল্টার করা দৃশ্য মূল তালিকারই উপসেট: লিংক অনুসরণযোগ্য, কিন্তু আলাদা করে ইনডেক্স নয়
+    index: filter.key === 'all' && !unknownParam,
   });
+  return { ...meta, alternates: { ...meta.alternates, types: { 'application/rss+xml': '/notices/feed.xml' } } };
 }
 
-function NoticeRow({ notice }: { notice: PublicNotice }) {
-  const sourceUrl = isHttpUrl(notice.source_url) ? notice.source_url : null;
-  const website = isHttpUrl(notice.official_website) ? notice.official_website : null;
-  const pdf = isHttpUrl(notice.pdf_url) ? notice.pdf_url : null;
-
+function UpcomingStrip({ items }: { items: PublicNotice[] }) {
+  if (items.length === 0) return null;
   return (
-    <li id={`notice-${notice.id}`} className="scroll-mt-20 py-4">
-      <p className="text-xs font-semibold text-brand-800">{notice.kind_label}</p>
-      <h2 className="mt-0.5 font-serif text-base font-bold leading-snug text-ink sm:text-lg">{notice.title}</h2>
-
-      <dl className="mt-1.5 grid gap-x-4 gap-y-0.5 text-sm text-ink-soft sm:grid-cols-2">
-        {notice.organization_name && (
-          <div>
-            <dt className="inline text-muted">প্রকাশক: </dt>
-            <dd className="inline">{notice.organization_name}</dd>
-          </div>
-        )}
-        {notice.notice_date && (
-          <div>
-            <dt className="inline text-muted">নোটিশের তারিখ: </dt>
-            <dd className="inline">{formatDateBn(notice.notice_date)}</dd>
-          </div>
-        )}
-        {notice.event_date && (
-          <div>
-            <dt className="inline text-muted">পরীক্ষার তারিখ: </dt>
-            <dd className="inline font-semibold text-ink">{formatDateBn(notice.event_date)}</dd>
-          </div>
-        )}
-      </dl>
-
-      {notice.body_text && (
-        <details className="mt-2 text-sm">
-          <summary className="cursor-pointer text-brand-800 hover:underline">বিস্তারিত</summary>
-          <p className="mt-1.5 whitespace-pre-line leading-relaxed text-ink-soft">{notice.body_text}</p>
-        </details>
-      )}
-
-      <div className="mt-2.5 flex flex-wrap gap-2 text-xs font-bold">
-        {sourceUrl && (
-          <a href={sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex items-center gap-1 rounded-full bg-brand-800 px-3 py-1.5 text-white hover:bg-brand-700">
-            {notice.notice_link_type === 'notice' ? 'মূল নোটিশ দেখুন' : 'প্রতিষ্ঠানের নোটিশ পাতা দেখুন'}
-            <Icon name="external" className="h-3.5 w-3.5" />
-          </a>
-        )}
-        {pdf && (
-          <a href={pdf} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full border border-line px-3 py-1.5 text-ink hover:border-brand-600">
-            PDF
-            <Icon name="external" className="h-3.5 w-3.5" />
-          </a>
-        )}
-        {website && (
-          <a href={website} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex items-center gap-1 rounded-full border border-line px-3 py-1.5 text-ink hover:border-brand-600">
-            {hostOf(website)}
-            <Icon name="external" className="h-3.5 w-3.5" />
-          </a>
-        )}
+    <section className="nx-upcoming" aria-labelledby="upcoming-heading">
+      <div className="nx-upcoming-head">
+        <h2 id="upcoming-heading">আসন্ন পরীক্ষা ও ভাইভা</h2>
+        <p>কাছের তারিখ আগে</p>
       </div>
-    </li>
+      <ol>
+        {items.map((n) => {
+          const [day, month] = formatDateBn(n.event_date).split(' ');
+          const state = eventState(n);
+          return (
+            <li key={n.id} className={`nx-tone-${noticeTone(n)}`}>
+              <div className="nx-up">
+                <span className="nx-cal" aria-hidden="true">
+                  <small>{month}</small>
+                  <b>{day}</b>
+                </span>
+                <div>
+                  <h3>
+                    <Link href={noticePath(n)}>{n.title}</Link>
+                  </h3>
+                  <p>
+                    <span className="nx-chip">{n.kind_label}</span>
+                    {state.phase !== 'none' && <span className={`nx-state ${state.phase}`}>{state.label}</span>}
+                    {n.event_time && <span>{n.event_time}</span>}
+                  </p>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 
 export default async function NoticesPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
   const page = parsePage(sp.page);
-  const filter = FILTERS.find((f) => f.key === sp.filter) ?? FILTERS[0];
+  const filter = filterFrom(sp.filter);
+  const showUpcoming = page === 1 && (filter.key === 'all' || filter.key === 'exam_schedule' || filter.key === 'viva');
 
-  const res = await getNotices({ ...filter.params, page, per_page: PER_PAGE }).catch(() => null);
+  const [res, upcoming] = await Promise.all([
+    getNotices({ ...filter.params, page, per_page: PER_PAGE }).catch(() => null),
+    showUpcoming
+      ? getNotices({ ...(filter.key === 'all' ? {} : filter.params), upcoming: true, per_page: 6 })
+          .then((r) => r.data)
+          .catch(() => [] as PublicNotice[])
+      : Promise.resolve([] as PublicNotice[]),
+  ]);
   const rows = res?.data ?? [];
   const meta = res?.meta ?? { current_page: 1, last_page: 1, total: 0, per_page: PER_PAGE };
 
-  const hrefFor = (p: number, key = filter.key) => {
-    const params = new URLSearchParams();
-    if (key !== 'all') params.set('filter', key);
-    if (p > 1) params.set('page', String(p));
-    const qs = params.toString();
-    return `/notices${qs ? `?${qs}` : ''}`;
-  };
-
   return (
     <div className="container-page py-4 sm:py-5">
-      <Breadcrumbs items={[{ name: 'নোটিশ ও পরীক্ষার সময়সূচি', path: '/notices' }]} />
+      <NoticeHashRedirect />
+      <Breadcrumbs
+        items={[
+          { name: 'নোটিশ ও ফলাফল', path: '/notices' },
+          ...(filter.key !== 'all' ? [{ name: filter.label, path: hrefFor(1, filter.key) }] : []),
+        ]}
+      />
 
       <header className="mt-2 max-w-3xl sm:mt-3">
-        <h1 className="font-serif text-xl font-bold text-ink sm:text-2xl">নোটিশ ও পরীক্ষার সময়সূচি</h1>
-        <p className="mt-1.5 text-sm leading-relaxed text-ink-soft">
-          নিয়োগ পরীক্ষার সময়সূচি, মৌখিক পরীক্ষা, প্রবেশপত্র ও ফলাফলের নোটিশ। প্রতিটির সাথে প্রকাশকারী প্রতিষ্ঠান, তারিখ আর মূল নোটিশের লিংক দেওয়া আছে।
+        <h1 className="font-serif text-xl font-bold text-ink sm:text-[28px]">{filter.heading}</h1>
+        <p className="mt-1.5 text-sm leading-relaxed text-ink-soft sm:text-[15px]">
+          সরকারি নিয়োগ পরীক্ষার সময়সূচি, প্রবেশপত্র, মৌখিক পরীক্ষা ও ফলাফলের নোটিশ। প্রতিটি নোটিশের পাতায় প্রতিষ্ঠান, তারিখ, সময়, কেন্দ্র আর মূল নোটিশের লিংক।
         </p>
         <p className="mt-1 text-xs text-muted">দৈনিক চাকরি কোনো সরকারি সংস্থা নয়। পরীক্ষার আগে মূল নোটিশ মিলিয়ে নিন।</p>
       </header>
 
-      <nav aria-label="নোটিশের ধরন" className="mt-4 flex flex-wrap gap-2">
-        {FILTERS.map((f) => (
-          <Link
-            key={f.key}
-            href={hrefFor(1, f.key)}
-            aria-current={f.key === filter.key ? 'page' : undefined}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${
-              f.key === filter.key ? 'bg-brand-800 text-white' : 'border border-line bg-surface text-ink hover:border-brand-600'
-            }`}
-          >
+      <nav aria-label="নোটিশের ধরন" className="nx-filters">
+        {NOTICE_FILTERS.map((f) => (
+          <Link key={f.key} href={hrefFor(1, f.key)} aria-current={f.key === filter.key ? 'page' : undefined}>
             {f.label}
           </Link>
         ))}
       </nav>
+
+      {showUpcoming && <UpcomingStrip items={upcoming} />}
 
       {res === null ? (
         <div className="mt-6 rounded-xl border border-line bg-stone-50 p-6 text-center">
@@ -157,20 +148,30 @@ export default async function NoticesPage({ searchParams }: { searchParams: Sear
       ) : rows.length === 0 ? (
         <div className="mt-6">
           <EmptyState
-            title="এখনো কোনো নোটিশ নেই"
-            body="নতুন পরীক্ষার সময়সূচি বা নোটিশ প্রকাশ হলে এখানে দেখা যাবে।"
-            action={{ href: '/', label: 'চাকরির বিজ্ঞপ্তি দেখুন' }}
+            title="এই ধরনের কোনো নোটিশ এখনো নেই"
+            body="নতুন পরীক্ষার সময়সূচি, প্রবেশপত্র বা ফলাফল প্রকাশ হলে এখানে দেখা যাবে।"
+            action={{ href: '/notices', label: 'সব নোটিশ দেখুন' }}
           />
         </div>
       ) : (
-        <ol className="mt-4 divide-y divide-line/70 rounded-2xl border border-line bg-surface px-3.5 shadow-xs sm:px-5">
-          {rows.map((n) => (
-            <NoticeRow key={n.id} notice={n} />
-          ))}
-        </ol>
+        <>
+          <div className="mt-6 flex items-baseline justify-between gap-3">
+            <h2 className="text-base font-bold text-ink sm:text-lg">
+              {filter.key === 'all' ? 'সর্বশেষ প্রকাশিত' : filter.label}
+            </h2>
+            <span className="text-xs text-muted">মোট {toBnDigits(meta.total)}টি · নোটিশের তারিখ অনুযায়ী নতুন আগে</span>
+          </div>
+          <ol className="nx-grid mt-3">
+            {rows.map((n, i) => (
+              <li key={n.id}>
+                <NoticeCard notice={n} headingLevel="h3" eager={i < 3} />
+              </li>
+            ))}
+          </ol>
+        </>
       )}
 
-      {rows.length > 0 && <Pagination currentPage={meta.current_page} lastPage={meta.last_page} hrefFor={(p) => hrefFor(p)} />}
+      {rows.length > 0 && <Pagination currentPage={meta.current_page} lastPage={meta.last_page} hrefFor={(p) => hrefFor(p, filter.key)} />}
     </div>
   );
 }

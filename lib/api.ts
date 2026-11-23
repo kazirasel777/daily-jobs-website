@@ -17,7 +17,7 @@ import type {
   CurrentAffair,
   SitemapJobItem,
 } from '@/types/job';
-import type { NoticeKind, NoticeType, PublicNotice } from '@/types/notice';
+import type { NoticeKind, NoticeType, PublicNotice, SitemapNoticeItem } from '@/types/notice';
 
 const DEFAULT_API_BASE_URL = 'https://jobs.kazitechsolutions.com/api/v1';
 const FETCH_TIMEOUT_MS = 8000;
@@ -30,6 +30,15 @@ export const REVALIDATE = {
   study: 900,
   sources: 900,
   notices: 300,
+} as const;
+
+/**
+ * Cache tags. Laravel calls /api/revalidate with these after a notice is published,
+ * corrected, unpublished or deleted, so the time-based refresh above is only a fallback.
+ */
+export const CACHE_TAGS = {
+  notices: 'notices',
+  notice: (id: number | string) => `notice-${id}`,
 } as const;
 
 /** Thrown when the API is unreachable or answers with an unexpected error. */
@@ -61,7 +70,7 @@ const RETRY_TIMEOUT_MS = 5000;
 
 class RetryableFailure extends Error {}
 
-async function fetchOnce<T>(url: string, endpoint: string, revalidate: number, timeoutMs: number): Promise<T | null> {
+async function fetchOnce<T>(url: string, endpoint: string, revalidate: number, timeoutMs: number, tags?: string[]): Promise<T | null> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -69,7 +78,7 @@ async function fetchOnce<T>(url: string, endpoint: string, revalidate: number, t
     const response = await fetch(url, {
       headers: apiHeaders(),
       signal: controller.signal,
-      next: { revalidate },
+      next: tags?.length ? { revalidate, tags } : { revalidate },
     });
 
     if (response.status === 404) return null;
@@ -97,17 +106,17 @@ async function fetchOnce<T>(url: string, endpoint: string, revalidate: number, t
  * timeouts, network failures and other non-2xx answers. A quick passing failure
  * (429/502/503/504 or a dropped connection) is retried once before giving up.
  */
-async function apiFetch<T>(endpoint: string, revalidate: number): Promise<T | null> {
+async function apiFetch<T>(endpoint: string, revalidate: number, tags?: string[]): Promise<T | null> {
   const url = `${getApiBaseUrl()}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   const started = Date.now();
   try {
-    return await fetchOnce<T>(url, endpoint, revalidate, FETCH_TIMEOUT_MS);
+    return await fetchOnce<T>(url, endpoint, revalidate, FETCH_TIMEOUT_MS, tags);
   } catch (error) {
     if (!(error instanceof RetryableFailure)) throw error;
     if (Date.now() - started > RETRY_IF_FAILED_WITHIN_MS) throw new ApiUnavailableError(endpoint, error.message);
     await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
     try {
-      return await fetchOnce<T>(url, endpoint, revalidate, RETRY_TIMEOUT_MS);
+      return await fetchOnce<T>(url, endpoint, revalidate, RETRY_TIMEOUT_MS, tags);
     } catch (retryError) {
       if (retryError instanceof RetryableFailure) throw new ApiUnavailableError(endpoint, retryError.message);
       throw retryError;
@@ -311,6 +320,8 @@ export async function getSourceJobs(params: GetSourceJobsParams = {}): Promise<P
 export interface GetNoticesParams {
   type?: NoticeType;
   kind?: NoticeKind;
+  /** Exams/vivas that have not finished yet, nearest date first. */
+  upcoming?: boolean;
   page?: number;
   per_page?: number;
 }
@@ -319,10 +330,39 @@ export async function getNotices(params: GetNoticesParams = {}): Promise<Paginat
   const query = new URLSearchParams();
   if (params.type) query.set('type', params.type);
   if (params.kind) query.set('kind', params.kind);
+  if (params.upcoming) query.set('upcoming', '1');
   query.set('page', clampPage(params.page).toString());
   query.set('per_page', clampPerPage(params.per_page).toString());
-  const res = await apiFetch<PaginatedResponse<PublicNotice>>(`/notices?${query.toString()}`, REVALIDATE.notices);
+  const res = await apiFetch<PaginatedResponse<PublicNotice>>(`/notices?${query.toString()}`, REVALIDATE.notices, [CACHE_TAGS.notices]);
   return res ?? emptyPage(clampPage(params.page), clampPerPage(params.per_page));
+}
+
+/**
+ * One published notice by slug ("42-bpsc-viva-schedule") or bare id. The API finds it by the
+ * leading id, so an older slug still resolves (the page then redirects to the current one).
+ * `null` = not published, unpublished or deleted. Throws when the API is unavailable.
+ */
+export async function getNoticeDetail(slugOrId: string): Promise<PublicNotice | null> {
+  let clean = '';
+  try {
+    clean = decodeURIComponent(slugOrId ?? '').trim().toLowerCase();
+  } catch {
+    return null;
+  }
+  const id = /^(\d{1,10})(?:-[a-z0-9-]*)?$/.exec(clean)?.[1];
+  if (!id) return null;
+  // Requested by id: works on older API builds too, and one cache entry serves every slug variant.
+  const res = await apiFetch<SingleResponse<PublicNotice>>(`/notices/${id}`, REVALIDATE.notices, [
+    CACHE_TAGS.notices,
+    CACHE_TAGS.notice(id),
+  ]);
+  return res?.data ?? null;
+}
+
+/** Every visible notice for the sitemap. `null` = this API build has no such endpoint yet. */
+export async function getSitemapNotices(): Promise<SitemapNoticeItem[] | null> {
+  const res = await apiFetch<{ data: SitemapNoticeItem[] }>('/sitemap/notices', REVALIDATE.notices, [CACHE_TAGS.notices]);
+  return res ? res.data : null;
 }
 
 /** Home page strip: an outage or an older server simply hides the section. */

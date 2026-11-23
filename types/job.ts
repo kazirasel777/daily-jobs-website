@@ -35,6 +35,10 @@ export interface JobListItem {
   /** Older API builds omit these; treat missing as active. */
   availability?: JobAvailability;
   application_open?: boolean;
+  /** App + website views (same as admin total). Older API builds omit these. */
+  mobile_views?: number;
+  web_views?: number;
+  total_views?: number;
 }
 
 export type JobAvailability = 'active' | 'recently_expired' | 'expired' | 'archived';

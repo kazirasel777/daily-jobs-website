@@ -5,6 +5,7 @@ import HomeIcon from '@/components/home/HomeIcons';
 import HomeJobCard from '@/components/home/HomeJobCard';
 import HomeCategories from '@/components/home/HomeCategories';
 import HomeNotices from '@/components/home/HomeNotices';
+import HomeSideNotices from '@/components/home/HomeSideNotices';
 import HomeStudy from '@/components/home/HomeStudy';
 import { formatDateBn, toBnDigits, toBnNumber } from '@/lib/format';
 import { jobPath, pagedPath } from '@/lib/site';
@@ -83,6 +84,8 @@ export default function HomeView({
               categoryCounts={categoryCounts}
               selectedCategory={selectedCategory?.slug}
             />
+
+            <HomeSideNotices notices={notices} />
 
             <section className="home-study-short">
               <span className="mini">

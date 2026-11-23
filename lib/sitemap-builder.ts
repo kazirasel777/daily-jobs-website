@@ -4,6 +4,7 @@
 // reliably without framework-internal mocks.
 import type { MetadataRoute } from 'next';
 import type { JobCategory, JobListItem, QuestionCollection, SitemapJobItem, Subject } from '@/types/job';
+import type { SitemapNoticeItem } from '@/types/notice';
 
 /** Target revalidation interval for search engine discovery (15 minutes). */
 export const SITEMAP_REVALIDATE_SECONDS = 900;
@@ -83,6 +84,8 @@ export interface BuildSitemapDataParams {
   indexJobs?: SitemapJobItem[] | null;
   categories: JobCategory[];
   studyData?: StudySitemapData | null;
+  /** Every visible notice (/sitemap/notices); only `indexable` ones get a detail URL. */
+  notices?: SitemapNoticeItem[] | null;
   siteUrl?: string;
 }
 
@@ -97,6 +100,7 @@ export function buildSitemapData({
   indexJobs = null,
   categories,
   studyData,
+  notices = null,
   siteUrl = 'https://dailyjobs.bd',
 }: BuildSitemapDataParams): MetadataRoute.Sitemap {
   const cleanSiteUrl = siteUrl.replace(/\/+$/, '');
@@ -165,8 +169,19 @@ export function buildSitemapData({
     }
   }
 
+  // Notices: the list (last change = newest notice) and every indexable detail page.
+  // Filtered list views are noindex and stay out; paginated pages are reached by links.
+  const noticeRows = notices ?? [];
+  const newestNotice = latest(noticeRows.map((n) => validDate(n.updated_at) ?? validDate(n.published_at)));
+  entries.push({ url: toUrl('/notices'), ...(newestNotice ? { lastModified: newestNotice } : {}) });
+  for (const n of noticeRows) {
+    if (!n.indexable) continue;
+    const modified = validDate(n.updated_at) ?? validDate(n.published_at);
+    entries.push({ url: toUrl(`/notices/${n.slug || n.id}`), ...(modified ? { lastModified: modified } : {}) });
+  }
+
   // Static informational pages are always indexable, even if jobs = 0
-  for (const path of ['/about', '/contact', '/privacy', '/disclaimer', '/sources', '/notices']) {
+  for (const path of ['/about', '/contact', '/privacy', '/disclaimer', '/sources']) {
     entries.push({ url: toUrl(path) });
   }
 
@@ -313,6 +328,8 @@ export interface GenerateSitemapParams {
   fetchSitemapJobs?: () => Promise<SitemapJobItem[] | null>;
   fetchCategories: () => Promise<JobCategory[]>;
   fetchStudyData?: () => Promise<StudySitemapData>;
+  /** Optional: `null` = older API without /sitemap/notices (detail URLs omitted). A failure serves the last complete snapshot. */
+  fetchSitemapNotices?: () => Promise<SitemapNoticeItem[] | null>;
   cache?: SitemapCacheAdapter | null;
   siteUrl?: string;
   now?: number;
@@ -333,6 +350,7 @@ export async function generateSitemapWithResilience({
   fetchSitemapJobs,
   fetchCategories,
   fetchStudyData,
+  fetchSitemapNotices,
   cache = null,
   siteUrl,
   now = Date.now(),
@@ -392,6 +410,17 @@ export async function generateSitemapWithResilience({
       }
     }
 
+    // 3c. Notices (an outage counts like the old-job list: serve the last complete snapshot)
+    let notices: SitemapNoticeItem[] | null = null;
+    if (fetchSitemapNotices) {
+      try {
+        notices = await fetchSitemapNotices();
+      } catch (err) {
+        oldCoverageFailed = true;
+        console.warn('[Sitemap] Notice list unavailable:', err);
+      }
+    }
+
     // Last known good: an outage of the old-job lists must not quietly drop hundreds of live
     // pages from the sitemap. A recent complete snapshot is served instead when there is one.
     if (oldCoverageFailed && cache) {
@@ -410,6 +439,7 @@ export async function generateSitemapWithResilience({
       indexJobs,
       categories,
       studyData,
+      notices,
       siteUrl,
     });
 

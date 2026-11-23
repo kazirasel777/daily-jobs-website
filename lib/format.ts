@@ -114,3 +114,16 @@ export function parsePage(raw: string | string[] | undefined): number {
   if (typeof raw !== 'string' || !/^\d{1,4}$/.test(raw)) return 1;
   return Math.max(1, parseInt(raw, 10));
 }
+
+/** Compact Bengali count for view badges: ৯৮৭, ১.২ হাজার, ৩.৪ লাখ. */
+export function formatCountBn(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '';
+  const n = Math.max(0, Math.floor(value));
+  const compact = (v: number, unit: string) => {
+    const rounded = v >= 10 ? Math.round(v) : Math.round(v * 10) / 10;
+    return `${toBnDigits(String(rounded))} ${unit}`;
+  };
+  if (n >= 100000) return compact(n / 100000, 'লাখ');
+  if (n >= 1000) return compact(n / 1000, 'হাজার');
+  return toBnDigits(String(n));
+}

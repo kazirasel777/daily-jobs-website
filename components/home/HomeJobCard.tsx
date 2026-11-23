@@ -1,7 +1,7 @@
 // File: components/home/HomeJobCard.tsx
 import Link from 'next/link';
 import HomeIcon from './HomeIcons';
-import { formatDateBn, toBnNumber } from '@/lib/format';
+import { formatCountBn, formatDateBn, toBnNumber } from '@/lib/format';
 import { jobPath } from '@/lib/site';
 import type { JobListItem } from '@/types/job';
 
@@ -27,6 +27,10 @@ export default function HomeJobCard({ job }: HomeJobCardProps) {
     job.vacancies !== null && job.vacancies > 0
       ? `${toBnNumber(job.vacancies)} জন নিয়োগ`
       : 'নিয়োগ বিজ্ঞপ্তি';
+
+  // Admin total (app + web). Older API builds send only mobile_views; hide when 0/missing.
+  const totalViews = job.total_views ?? job.mobile_views ?? 0;
+  const viewsText = totalViews > 0 ? formatCountBn(totalViews) : '';
 
   return (
     <article className="home-job-card">
@@ -113,9 +117,16 @@ export default function HomeJobCard({ job }: HomeJobCardProps) {
               <HomeIcon name="calendar" />
               আবেদন শেষ <strong>{job.deadline ? formatDateBn(job.deadline) : 'চলমান'}</strong>
             </span>
-            <span className="home-views" aria-label="দেখা হয়েছে —">
-              <HomeIcon name="eye" />
-              —
+            <span
+              className="home-views"
+              aria-label={viewsText ? `${viewsText} বার দেখা হয়েছে` : undefined}
+            >
+              {viewsText && (
+                <>
+                  <HomeIcon name="eye" />
+                  {viewsText}
+                </>
+              )}
               <HomeIcon name="arrow" className="arrow" />
             </span>
           </div>

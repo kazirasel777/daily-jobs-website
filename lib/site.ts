@@ -33,6 +33,11 @@ export function jobPath(job: { slug?: string | null; id: number }): string {
   return `/job/${job.slug || job.id}`;
 }
 
+/** Notice detail page. Older API builds send no slug; the id alone resolves and redirects. */
+export function noticePath(notice: { slug?: string | null; id: number }): string {
+  return `/notices/${notice.slug || notice.id}`;
+}
+
 /** Vercel preview deployments must never be indexed. */
 export function isPreviewDeployment(): boolean {
   return process.env.VERCEL_ENV === 'preview';

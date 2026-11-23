@@ -1,11 +1,15 @@
 // File: components/home/HomeNotices.tsx
-// প্রথম পাতায় সর্বশেষ নোটিশ / পরীক্ষার সময়সূচি। ডেটা না থাকলে অংশটা দেখায় না (নমুনা নয়)।
+// প্রথম পাতায় সর্বশেষ নোটিশ / পরীক্ষার সময়সূচি / ফলাফল। প্রতিটি নোটিশের নিজস্ব পাতায় নেয়।
+// ডেটা না থাকলে অংশটা দেখায় না (নমুনা নয়)।
 import Link from 'next/link';
 import HomeIcon from './HomeIcons';
+import { NoticeStateChip } from '@/components/notices/NoticeCard';
 import { formatDateBn } from '@/lib/format';
+import { eventDateText } from '@/lib/notice';
+import { noticePath } from '@/lib/site';
 import type { PublicNotice } from '@/types/notice';
 
-export function noticeTone(notice: Pick<PublicNotice, 'type' | 'kind'>): 'exam' | 'result' | 'admit' {
+function homeTone(notice: Pick<PublicNotice, 'type' | 'kind'>): 'exam' | 'result' | 'admit' {
   if (notice.type === 'result') return 'result';
   if (notice.kind === 'admit_card') return 'admit';
   return 'exam';
@@ -28,14 +32,19 @@ export default function HomeNotices({ notices }: { notices: PublicNotice[] }) {
 
       <div className="home-panel home-notice-panel">
         {notices.map((item) => (
-          <Link key={item.id} href={`/notices#notice-${item.id}`} className="home-notice">
-            <span className={`home-notice-type ${noticeTone(item)}`}>{item.kind_label}</span>
+          <Link key={item.id} href={noticePath(item)} className="home-notice">
+            <span className={`home-notice-type ${homeTone(item)}`}>{item.kind_label}</span>
             <span>
               <h3>{item.title}</h3>
               <p>
-                {[item.organization_name, item.event_date ? `পরীক্ষা ${formatDateBn(item.event_date)}` : formatDateBn(item.notice_date)]
+                {[item.organization_name, item.event_date ? `${item.kind === 'viva' ? 'ভাইভা' : 'পরীক্ষা'} ${eventDateText(item)}` : formatDateBn(item.notice_date)]
                   .filter(Boolean)
                   .join(' · ')}
+                {(item.notice_status || item.event_date) && (
+                  <span className="ml-1.5 inline-block align-middle text-[11px]">
+                    <NoticeStateChip notice={item} />
+                  </span>
+                )}
               </p>
             </span>
             <HomeIcon name="arrow" />

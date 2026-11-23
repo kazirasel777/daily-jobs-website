@@ -4,6 +4,7 @@ import { Noto_Sans_Bengali, Noto_Serif_Bengali } from 'next/font/google';
 import { GoogleAnalytics } from '@next/third-parties/google';
 import './globals.css';
 import '@/components/home/home.css';
+import '@/components/notices/notices.css';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { getJobCategoriesSafe } from '@/lib/api';

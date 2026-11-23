@@ -14,6 +14,7 @@ import {
   getCurrentAffairs,
   getJobCategoriesSafe,
   getSitemapJobs,
+  getSitemapNotices,
   getStudyCollections,
   getStudyQuestions,
   getStudySubjects,
@@ -69,6 +70,7 @@ async function generateProductionSitemap(): Promise<SitemapPayload> {
     fetchSitemapJobs: getSitemapJobs,
     fetchCategories: getJobCategoriesSafe,
     fetchStudyData: getStudyDataWithFallback,
+    fetchSitemapNotices: getSitemapNotices,
     cache: processCache,
     siteUrl: getSiteUrl(),
     maxStaleAgeMs: MAX_STALE_AGE_MS,
@@ -81,7 +83,7 @@ const getCachedSitemap = unstable_cache(
   async (): Promise<SitemapPayload> => {
     return generateProductionSitemap();
   },
-  ['dailyjobs-sitemap-payload-v6'],
+  ['dailyjobs-sitemap-payload-v7'],
   {
     revalidate: SITEMAP_REVALIDATE_SECONDS,
     tags: ['sitemap'],
