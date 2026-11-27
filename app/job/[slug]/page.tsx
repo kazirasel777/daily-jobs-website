@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { notFound, permanentRedirect } from 'next/navigation';
 import DeadlineBadge from '@/components/DeadlineBadge';
 import Icon from '@/components/Icon';
-import JobSourceList, { visibleSources } from '@/components/JobSourceList';
+import JobSourceList, { noticeButtonLabel, noticeLink, visibleSources } from '@/components/JobSourceList';
 import HomeIcon from '@/components/home/HomeIcons';
 import ViewCounter from '@/components/ViewCounter';
 import { getJobDetail, getJobs } from '@/lib/api';
@@ -109,6 +109,10 @@ export default async function JobDetailPage({ params }: { params: Params }) {
   const schema = expired ? null : jobPostingSchema(job);
   // অ্যাপের মতোই: "যেখানে খবর পেয়েছি" (discovery) মূল উৎস হিসেবে দেখানো হয় না
   const sources = visibleSources(job.sources);
+  // মূল বিজ্ঞপ্তির বাটন: মেয়াদ শেষ হলেও দেখায়; "সরাসরি বিজ্ঞপ্তি" আগে, না থাকলে নিয়োগ তালিকা
+  const noticeSource =
+    sources.find((src) => noticeLink(src) && src.notice_link_type === 'notice') ?? sources.find((src) => noticeLink(src));
+  const officialNoticeUrl = noticeSource ? noticeLink(noticeSource) : null;
 
   // সংশ্লিষ্ট সক্রিয় চাকরি (একই বিভাগ); মেয়াদোত্তীর্ণ পেজে বিভাগে কিছু না থাকলে সর্বশেষ সক্রিয় চাকরি
   let related = job.category
@@ -324,10 +328,11 @@ export default async function JobDetailPage({ params }: { params: Params }) {
               <strong>{job.deadline ? formatDateBn(job.deadline) : 'বিজ্ঞপ্তি অনুযায়ী'}</strong>
             </div>
 
+            {/* "আবেদন করুন" শুধু সক্রিয় চাকরির বৈধ apply_link থাকলে; মেয়াদ শেষ বা লিংক না থাকলে কোনো বাটন নেই */}
             {expired ? (
-              <span className="primary-action" style={{ opacity: 0.65, cursor: 'not-allowed', background: '#728079' }}>
-                আবেদনের সময় শেষ
-              </span>
+              <p style={{ fontSize: '13px', color: 'var(--ink)', margin: '12px 0', lineHeight: 1.7 }}>
+                আবেদনের সময় শেষ। মূল বিজ্ঞপ্তির লিংক থাকলে নিচে দেখা যাবে।
+              </p>
             ) : applyLink ? (
               <>
                 <a
@@ -335,8 +340,9 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="primary-action"
+                  data-dj-action="apply"
                 >
-                  নিয়োগকারীর সাইটে আবেদন ↗
+                  আবেদন করুন ↗
                 </a>
                 <p style={{ marginTop: '8px', textAlign: 'center', fontSize: '11px', color: 'var(--muted)', wordBreak: 'break-all' }}>
                   {new URL(applyLink).hostname}
@@ -346,6 +352,18 @@ export default async function JobDetailPage({ params }: { params: Params }) {
               <p style={{ fontSize: '13px', color: 'var(--ink)', margin: '12px 0', lineHeight: 1.7 }}>
                 অনলাইন আবেদনের লিংক দেওয়া নেই। মূল বিজ্ঞপ্তির নির্দেশনা অনুযায়ী আবেদন করুন।
               </p>
+            )}
+
+            {officialNoticeUrl && noticeSource && (
+              <a
+                className="secondary-action"
+                href={officialNoticeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-dj-action="notice"
+              >
+                {noticeButtonLabel(noticeSource)} ↗
+              </a>
             )}
 
             {images.length > 0 && (

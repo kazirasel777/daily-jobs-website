@@ -68,8 +68,11 @@ export interface PublicJobSource {
   website_url?: string | null;
   /** মূল বিজ্ঞপ্তির নিজস্ব পেজ/PDF — "মূল বিজ্ঞপ্তি দেখুন"। */
   notice_url?: string | null;
-  /** notice_url কোথায় নেয়: notice (নির্দিষ্ট বিজ্ঞপ্তি/PDF) | career (নিয়োগ পাতা) | website; null = career */
+  /** notice_url কোথায় নেয়: notice (নির্দিষ্ট বিজ্ঞপ্তি/PDF) | career (এই বিজ্ঞপ্তি আছে এমন নিয়োগ তালিকা); null = career।
+   *  'website' শুধু পুরোনো API-তে আসত — নতুন API সাধারণ ওয়েবসাইটকে মূল বিজ্ঞপ্তি হিসেবে পাঠায় না। */
   notice_link_type?: 'notice' | 'career' | 'website' | null;
+  /** true = একই যাচাইকৃত অফিসিয়াল পেজে পূর্ণ বিজ্ঞপ্তি ও আবেদন (notice_url = apply_link)। পুরোনো API-তে নেই। */
+  notice_same_as_apply?: boolean;
   /** পুরোনো ক্লায়েন্টের জন্য একই তথ্য বাটন আকারে। */
   link_kind?: 'notice' | 'none' | string;
   button_label?: string | null;

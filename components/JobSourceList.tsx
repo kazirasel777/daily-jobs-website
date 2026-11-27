@@ -41,6 +41,11 @@ export function noticeButtonLabel(src: PublicJobSource): string {
   return 'প্রতিষ্ঠানের নিয়োগ পাতা দেখুন';
 }
 
+/** উৎসের মূল বিজ্ঞপ্তির লিংক — API যা বৈধ বলে পাঠায় শুধু সেটিই (অন্য ঘর থেকে পূরণ হয় না)। */
+export function noticeLink(src: PublicJobSource): string | null {
+  return url(src.notice_url ?? (src.link_kind && src.link_kind !== 'none' ? src.button_url : null));
+}
+
 /** "যেখানে খবর পেয়েছি" (discovery) মূল উৎস নয় — অ্যাপের মতোই বাদ। */
 export function visibleSources(sources: PublicJobSource[] | undefined): PublicJobSource[] {
   return (sources ?? []).filter((src) => src.source_role !== 'discovery_source');
@@ -62,7 +67,7 @@ export default function JobSourceList({ sources }: { sources: PublicJobSource[] 
       {sources.map((src) => {
         // পুরোনো API-তে name_url নেই — তখন source_url
         const nameUrl = url(src.name_url === undefined ? src.source_url : src.name_url);
-        const noticeUrl = url(src.notice_url ?? (src.link_kind && src.link_kind !== 'none' ? src.button_url : null));
+        const noticeUrl = noticeLink(src);
         const date = src.publication_date ? formatDateBn(src.publication_date) : null;
 
         let lines: React.ReactNode;
